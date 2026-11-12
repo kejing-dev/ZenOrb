@@ -1,70 +1,77 @@
-# 禅沙庭园 Aura Garden: project guidance
+# 呼吸禅境 ZenOrb: project guidance
 
-A round kinetic sand table on the desk for PICO OS 6 Shared Space (Spatial SDK BOM 6.1.9), package `io.embodit.auragarden`,
-v0.1.0. Design contract: spatial-app-factory `apps/aura-garden/design-package.json` v4 (gate B round 2, 2026-11-12: option A,
-one table + [看它画 | 我来耙], first screen = watch; 46 cm desk piece; three frames; v1 = draw a line, the ball follows).
-Skeleton from klotski-box (CloudAir lineage: two containers, theme, sound pool, board-input template); the sand,
-patterns, ball and rake are new.
+A breathing orb on the desk for PICO OS 6 Shared Space (Spatial SDK BOM 6.1.9), package `io.embodit.zenorb`, v0.1.0.
+Design contract: spatial-app-factory `apps/zen-orb/design-package.json` v4 (gate B round 2, 2026-11-12: default style
+oat glaze & walnut, switchable brass & basalt / moss & slate; hints beside the orb + one control window; pinch, lift to
+breathe in, lower to breathe out; own 3D models; v1 = desk volume only; focus timer kept, no "today" page).
+Skeleton from aura-garden (same archetype A: volume + Placement.right control window, theme, SoundPool, board-input).
+GitHub: `kejing-dev/ZenOrb` (private).
 
 ## Surfaces
-- **Table volume** (default container `AuraTable`, Volumetric 0.52 x 0.22 x 0.52 m, fixed scale, gravity aligned, uniform
-  resize). Table-local frame: origin at the sand base plane centre, (0, -0.060, 0) from the volume centre. Lathe frame
-  (walnut / oak / black steel), 60 dynamic sand chunks (201 x 201 height field, 2 mm), steel ball (r 5 mm), LED band
-  (unlit, 20 colours + off), three Tripo stones (rake mode only), rake (while raking), warm preview line.
-- **Control window** (`AuraControl`, Planar 480 x 560 dp, `Placement.right(AuraTable)`), no TabBar: home (watch or rake),
-  Adjust and Settings sub-pages with [返回]. [重开控制窗] closes and reopens beside the table; [退出应用] (tap twice) closes
-  both containers, removes the tasks, exits.
+- **Orb volume** (default container `ZenOrbVolume`, Volumetric 0.32 x 0.30 x 0.26 m, fixed scale, gravity aligned,
+  uniform resize). Content root = volume floor centre, (0, -0.15, 0) from the volume centre; +Z toward the user.
+  Cradle GLB, orb GLB under the `orb` holder (sphere collider r 0.060, Interactable, HoverEffect), guide ring (true
+  torus, scaled to r(f*) + 0.012), focus arc (36 x 10 deg segments on the cradle rim), the tag right of the orb and the
+  caption in front of the cradle (text drawn into textures, light text + dark outline, no plate), opaque contact shadow,
+  warm key light (1500 lux-scale).
+- **Control window** (`ZenOrbControl`, Planar 420 x 424 dp, `Placement.right(ZenOrbVolume)`), no TabBar: header
+  (title, [静音], [设置]); pages home S02 / welcome S01 / breath S03r S03 S05 / summary S04 / focus S06 S06p / focus done
+  S07 / settings S09 (pushed) / confirm (quit S11, clear, give up) / S00 loading / S10 volume closed.
+  Closing it with the system x is fine: pinching the orb starts the last rhythm (T14); it comes back at focus end and
+  when the launcher icon is tapped again.
 
 ## Code
 | Path | What |
 |---|---|
-| `domain/Geom.kt` | constants, theta-rho helpers, `Track` (densified polyline + arc length) |
-| `domain/Patterns.kt` | P1..P6 + clearing spiral E generators, `Seg` (deterministic path piece: rebuildable after restart) |
-| `domain/Sand.kt` | height field, capsule stamping with the 24 mm nearest-segment window, ball / rake profiles, wells, smoothing, dirty chunks |
-| `domain/Flow.kt` | the state machine S00..S25 (synchronized; ticked by the volume's ECS system), stones / rake / line view |
-| `domain/Save.kt` | `files/sand.bin` codec (header + uint16 µm heights, deflated) |
-| `ui/table/*` | `TableScene` (entities, materials, per-frame copy, <= 2 chunk rebuilds / frame), `TableScreen` (SpatialView + input), `Meshes`, `Palette` |
+| `domain/Breath.kt` | geometry constants (`Geo`), rhythms (`PatternId`), the guide curve (`Curve`), the forgiving `SyncJudge` |
+| `domain/Flow.kt` | the state machine: breath session x focus session, `OrbView` for the volume, `UiState` for the window |
+| `domain/Hints.kt` | every word beside the orb (zh / en) |
+| `domain/Settings.kt` | settings, styles, day log, focus block |
+| `data/Stores.kt` | `files/zenorb.json` (atomic) + settings prefs |
+| `ui/orb/*` | `OrbScene` (entities, per-frame copy from the ECS system), `OrbScreen` (SpatialView + input), `Meshes`, `HintTex`, `input/BoardInput.kt` (factory template) |
 | `ui/control/*` | the window pages; every Text logs `OVERFLOW <tag>` when cut |
-| `tools/` | `build_stones.py` (Tripo stones calibrated, D25), `build_textures.py`, `make_sounds.py` (CC0 library), `build_icon.py`, `loudness.py`, `ag.sh` |
+| `tools/` | `build_models.py` (3 styles -> GLB, port of design `zen-orb_3d.js`), `make_sounds.py` (CC0 recordings), `build_icon.py`, `loudness.py`, `zo.sh` |
 
-Volume input goes through the factory board-input template (`ui/table/input/BoardInput.kt`, + `onPress` for the press point):
-holders `sand` (box collider over the disc) and `ball` (sphere r 0.031, table mode only). Press point = raw pointer
-`position3D` converted with `convertPosition(Local -> localSpatial)`; drag = start + (dX, dZ - dY) x (entity m / physical m).
+Input (container-agnostic, D53): the board-input template resolves hits to `orb`; a tap = start (T4), a drag = take the
+orb: `Flow.dragBegin()` / `dragMove(dyContentMetres)` / `dragEnd()`. Only the vertical travel counts; it is divided by
+the volume's world scale (view px -> content metres at the press). A Full Space hand input would call the same three.
 
 ## Build / test (kj-mbp-m5)
 ```bash
 export JAVA_HOME=~/.pico/primer-cli/jdk/jdk-21.0.13+9/Contents/Home
-./gradlew assembleDebug :app:testDebugUnitTest      # 35 JVM tests: patterns, sand profiles / stamp rule / masks / smoothing, flow, save, hit replay, look
-~/.factory-venv/bin/python tools/build_stones.py ; ~/.factory-venv/bin/python tools/make_sounds.py ; ~/.factory-venv/bin/python tools/build_icon.py --icon512 icon.png
-DEV=emulator-5560 tools/ag.sh install
+./gradlew assembleDebug :app:testDebugUnitTest      # JVM tests: sync judge (13 sloppy scripts x 4 rhythms), curve, flow, save, layout / occlusion, hit replay, contrast
+~/.factory-venv/bin/python tools/build_models.py ; ~/.factory-venv/bin/python tools/make_sounds.py ; ~/.factory-venv/bin/python tools/build_icon.py --icon512 icon.png
+DEV=emulator-5564 tools/zo.sh install
 ```
-Emulators are shared: borrow with `python3 -I bin/emu_borrow.py borrow aura-garden` in the factory, return after.
+Emulators are shared: borrow with `python3 -I bin/emu_borrow.py borrow zen-orb` in the factory, return after.
 
 ## Debug broadcast (QA screenshots)
-`adb shell am broadcast -a io.embodit.auragarden.DEBUG -p io.embodit.auragarden --es cmd <cmd> --es a "<arg>"` (or `tools/ag.sh cmd <cmd> [arg]`). Log tag `AuraGarden`.
+`adb shell am broadcast -a io.embodit.zenorb.DEBUG -p io.embodit.zenorb --es cmd <cmd> --es a "<arg>"` (or
+`tools/zo.sh cmd <cmd> [arg]`). Log tag `ZenOrb`. Every command calls the same Flow methods as the buttons / 3D input.
 
-| State | Command | Notes |
-|---|---|---|
-| S00 准备中 | `s00hold on`, force-stop + launch, capture within 12 s, `s00hold off` | loading page + flat sand |
-| S01 接着上次 | force-stop, relaunch (hint for 6 s) | watch and rake saves |
-| S10 看它画 | `goto S10` · `pattern P1..P6` + `progress 0.7` | first run = five petals at 60 % |
-| S11 暂停 | `goto S11` (= the pause button) · `tapball` | |
-| S12 清空中 | `goto S12` (= [下一幅]) · `progress 0.5` | |
-| S13 照你画 | `goto S13` (S-line through dragBegin/Move/End) · `hline "x,z;x,z;…"` | |
-| S14 调整 | `goto S14` / `page adjust` · `light T B` (0..4 0..4) · `speed 1..5` · `choose P3` | |
-| S20 落石 | `goto S20` (holds with stones in the air) · `hold off` | |
-| S21 我来耙 | `goto S21` / `mode rake` | |
-| S22 耙沙中 | `goto S22` (rake held mid-stroke; `hold off` releases) · `stroke "x,z;…"` | |
-| S23 抹平确认 | `goto S23` | 3 s |
-| S24 抹平中 | `goto S24` (held halfway) · `hold off` | |
-| S25 收石 | `goto S25` (held) · `hold off` | |
-| S30 设置 | `goto S30` / `page settings` · `exitask` (quit armed) | |
-| S31 桌子收起 | `goto S31` (closes the default container) · `bring` | |
-Other: `frame walnut|oak|steel`, `lang zh|en|system`, `sound on|off`, `volume 0..2`, `reduced on|off`, `closepanel`, `reopen`,
-`save`, `fresh` (clears the save, first-run sand), `dump`.
+| State | How |
+|---|---|
+| S00 准备中 | `s00hold on`, force-stop + launch, capture within 12 s, `s00hold off` |
+| S01 第一次 | `fresh` (or `pm clear`) + relaunch; demo loops while the welcome is up |
+| S02 空闲 | `tap`, `tap`, `end`, `done` (gets past the welcome) |
+| S03r 准备 | `start CALM` (or `tap` on idle) |
+| S03 跟着 | `tap` (or `grab 0`) then `follow "lag=0.4 amp=0.9"` (drives the drag path every 33 ms); `hold "phase=in f=0.55 inband=true"` / `inband=false` for stills; `unhold` |
+| S03p 出带 | `stopfollow`, `grab 0`, wait 2.5 s -> 「再提一点」; `release`, wait 2 s -> 「捏住接着来」 (then `hold "f=0.05"`) |
+| S03h 闭眼跟 | `handsfree on`, `start CALM`, wait 4 s |
+| S04 小结 | `end` during S03 (or let the round finish) |
+| S05 暂停 | `pause` |
+| S06 / S06p | `focus 25` / `focuspause`; `focusfast on` before `focus` = 1 min per second |
+| S07 专注到点 | `focusfast on`, `focus 15`, wait 16 s |
+| S09 设置 | `page settings` |
+| S11 / 清空 / 放弃 | `confirm quit` / `confirm clear` / `giveup` (`giveupok` = its [确定]) |
+| S10 光球收起 | `closevolume`; `bring` |
+Other: `style glaze|brass|moss`, `pattern calm|box|sleep`, `lang zh|en|system`, `sound on|off`, `volume 0..2`,
+`closepanel`, `openpanel`, `testf on|off` (F-up test on the words), `seek <s>`, `dump`.
+Screenshot list: `apps/zen-orb/build/shots/<state>-<zh|en>.png` (script in the build station's scratchpad, steps above).
 
 ## Known
-- 3D drags / pinches can't be sent by `pico-cli interact` on the Mac emulator: driven by the debug broadcast through the
-  same Flow calls; hand ray / controller / eye-hand need the headset.
-- Ball loop: Spatial SDK audio on the ball entity when `Entity.playAudio` works (log `PROBE spatial audio`), else SoundPool.
-- Sounds are CC0 Kenney recordings; ball_roll / rake are stand-ins (paper / snow textures), see build/sound-sources.md.
+- 3D drags / pinches can't be sent by `pico-cli interact` on the Mac emulator: driven by the debug broadcast through
+  the same Flow calls; hand ray / controller / eye-hand need the headset (D53: Shared Space controller ray / eye-hand on
+  3D entities is a known platform risk, see factory feedback).
+- Words beside the orb face +Z (the volume front; the system turns the volume to the user). No head pose is read.
+- The volume does not know its distance, so the design's S01 「把光球拖近一点」 line (volume > 1.2 m) is not shown.

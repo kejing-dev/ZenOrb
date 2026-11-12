@@ -52,6 +52,7 @@ class DebugCommandReceiver : BroadcastReceiver() {
             "focuspause" -> f.focusPause()
             "focusresume" -> f.focusResume()
             "giveup" -> Ui.confirm = Confirm.GIVE_UP
+            "giveupok" -> { f.focusGiveUp(); Ui.confirm = null }        // = [确定] on the give-up confirm
             "focusfast" -> f.focusFast = arg != "off"
             "pattern" -> PatternId.parse(arg)?.let { p -> g.settings.update { it.copy(lastPattern = p) } }
             "style" -> g.settings.update { it.copy(style = Style.valueOf(arg.uppercase())) }

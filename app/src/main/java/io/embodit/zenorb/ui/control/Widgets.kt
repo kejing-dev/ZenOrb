@@ -44,9 +44,10 @@ internal fun Txt(
     modifier: Modifier = Modifier,
     maxLines: Int = 1,
     align: TextAlign = TextAlign.Start,
+    minLines: Int = 1,
 ) {
     Text(
-        text = text, style = style, color = color, modifier = modifier, maxLines = maxLines, softWrap = maxLines > 1, textAlign = align,
+        text = text, style = style, color = color, modifier = modifier, maxLines = maxLines, minLines = minLines, softWrap = maxLines > 1, textAlign = align,
         onTextLayout = { if (it.hasVisualOverflow) Log.w(TAG, "OVERFLOW $tag \"$text\"") },
     )
 }
@@ -111,17 +112,17 @@ internal fun ToggleButton(text: String, tag: String, on: Boolean, onClick: () ->
 
 /** A labelled row holding a same-page option switch (SegmentControl is never used to change pages). */
 @Composable
-internal fun OptionRow(label: String, tag: String, labelWidth: Dp = 112.dp, content: @Composable RowScope.() -> Unit) {
-    Row(Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {
+internal fun OptionRow(label: String, tag: String, labelWidth: Dp = 112.dp, rowHeight: Dp = 56.dp, content: @Composable RowScope.() -> Unit) {
+    Row(Modifier.fillMaxWidth().height(rowHeight), verticalAlignment = Alignment.CenterVertically) {
         Txt(label, "$tag/label", style = PicoTheme.typography.labelLarge, color = PicoTheme.colorScheme.labelPrimary, modifier = Modifier.width(labelWidth))
         content()
     }
 }
 
 @Composable
-internal fun <T> Segments(options: List<Pair<T, String>>, selected: T, tag: String, onSelect: (T) -> Unit, modifier: Modifier = Modifier, small: Boolean = false) {
+internal fun <T> Segments(options: List<Pair<T, String>>, selected: T, tag: String, onSelect: (T) -> Unit, modifier: Modifier = Modifier, small: Boolean = false, height: Dp = 64.dp) {
     // B19: the control itself is >= 48 dp tall (the default track is ~37 dp).
-    SegmentControl(modifier = modifier.height(64.dp)) {
+    SegmentControl(modifier = modifier.height(height)) {
         options.forEach { (value, label) ->
             SegmentItem(
                 selected = value == selected,
@@ -138,9 +139,9 @@ internal fun <T> Segments(options: List<Pair<T, String>>, selected: T, tag: Stri
 
 /** A whole >= 48 dp row that toggles (label + Switch); the bare SpatialUI Switch is only ~32 x 20 dp (QA q1-4, D44). */
 @Composable
-internal fun SwitchRow(label: String, tag: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+internal fun SwitchRow(label: String, tag: String, checked: Boolean, onChange: (Boolean) -> Unit, rowHeight: Dp = 56.dp) {
     Row(
-        Modifier.fillMaxWidth().height(56.dp).clip(RoundedCornerShape(16.dp))
+        Modifier.fillMaxWidth().height(rowHeight).clip(RoundedCornerShape(16.dp))
             .toggleable(value = checked, role = androidx.compose.ui.semantics.Role.Switch, onValueChange = onChange),
         verticalAlignment = Alignment.CenterVertically,
     ) {

@@ -4,14 +4,14 @@ synthesised: cut / pitched (offline resample) / faded / levelled here. 44.1 kHz 
   ~/.factory-venv/bin/python tools/make_sounds.py
 
 Sources (~/Downloads/cc0-sounds/freesound-zen-orb, pages say Creative Commons 0; LICENSE.txt there):
-  bowl_a  59159  singingbowlstruck2.wav by Coleco
+  bowl_a  439235 singing bowl.wav by zambolino
   bowl_b  573805 Singing Bowl, long without reverb by hollandm
   wood_a  218460 Wood block hit by thomasjaunism
   wood_b  533093 Wood Block by Sassaby
 
-inhale(_2)    bowl strike, 2.6 s with a 1.2 s fade (two recordings = two variants)          peak -3 dBFS
-exhale(_2)    the same strikes resampled 4 semitones down (design: 「同一颂钵录音降 4 个半音」)   peak -3 dBFS
-tick(_2)      wood block hit, 0.35 s (two recordings)                                         peak -6 dBFS
+inhale(_2)    bowl strike, 2.6 s with a 1.2 s fade (two recordings = two variants)          peak -1 dBFS
+exhale(_2)    the same strikes resampled 4 semitones down (design: 「同一颂钵录音降 4 个半音」)   peak -1 dBFS
+tick(_2)      wood block hit, 0.35 s (two recordings)                                         peak -2 dBFS
 done          bowl strike, 4.0 s decay                                                        peak -1 dBFS
 focus_end     done resampled 2 semitones up                                                   peak -1 dBFS
 """
@@ -68,16 +68,16 @@ def save(name, x):
 
 
 def main():
-    a = hp(onset(load("59159_333271.mp3")), 60)
+    a = hp(onset(load("439235_2557312.mp3")), 60)
     b = hp(onset(load("573805_5309408.mp3")), 60)
     wa = hp(onset(load("218460_3344538.mp3")), 80)
     wb = hp(onset(load("533093_2771755.mp3")), 80)
-    save("inhale", peak(cut(a, 2.6, 1.2), -3))
-    save("inhale_2", peak(cut(b, 2.6, 1.2), -3))
-    save("exhale", peak(cut(pitch(a, -4), 2.6, 1.2), -3))
-    save("exhale_2", peak(cut(pitch(b, -4), 2.6, 1.2), -3))
-    save("tick", peak(cut(wa, 0.35, 0.12), -6))
-    save("tick_2", peak(cut(wb, 0.35, 0.12), -6))
+    save("inhale", peak(cut(a, 2.6, 1.2), -1))
+    save("inhale_2", peak(cut(b, 2.6, 1.2), -1))
+    save("exhale", peak(cut(pitch(a, -4), 2.6, 1.2), -1))
+    save("exhale_2", peak(cut(pitch(b, -4), 2.6, 1.2), -1))
+    save("tick", peak(cut(wa, 0.35, 0.12), -2))
+    save("tick_2", peak(cut(wb, 0.35, 0.12), -2))
     done = cut(b, 4.0, 1.6)
     save("done", peak(done, -1))
     save("focus_end", peak(cut(pitch(b, 2), 4.0, 1.6), -1))

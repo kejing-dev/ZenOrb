@@ -25,6 +25,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -87,18 +89,19 @@ fun ControlWindow() {
     }
     LaunchedEffect(pageName) { Log.i(TAG, "PAGE $pageName") }
 
-    Box(Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 20.dp)) {
+    BlankProbe.page = pageName + "/" + (if (settings.language == Language.EN) "en" else if (settings.language == Language.ZH) "zh" else "sys")
+    Box(Modifier.fillMaxSize().onGloballyPositioned { BlankProbe.windowH = it.size.height.toFloat() }.padding(horizontal = 24.dp, vertical = if (pageName == "S09") 10.dp else 20.dp)) {
         when (pageName) {
             "S10" -> VolumeClosedPage(settings, graph)
             "S00" -> LoadingPage()
             "S09" -> SettingsPage(ui, settings, graph)
             "S04" -> SummaryPage(ui, settings, graph)
             "S03r", "S03", "S05" -> BreathPage(ui, settings, graph)
-            "S07" -> FocusDonePage(settings, graph)
+            "S07" -> FocusDonePage(ui, settings, graph)
             "S06", "S06p" -> FocusPage(ui, settings, graph)
             "S01" -> WelcomePage(settings, graph)
             "S02" -> HomePage(ui, settings, graph)
-            else -> ConfirmPage(Ui.confirm!!, ui, graph)
+            else -> ConfirmPage(Ui.confirm!!, ui, settings, graph)
         }
     }
 }
@@ -117,8 +120,27 @@ private fun patternTag(p: PatternId): String = stringResource(
 @Composable
 private fun PageColumn(header: @Composable () -> Unit, content: @Composable ColumnScope.() -> Unit) {
     Column(Modifier.fillMaxSize()) {
-        header()
-        Column(Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically), content = content)
+        Box(Modifier.onGloballyPositioned { BlankProbe.top = it.boundsInRoot().top }) { header() }
+        Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+            Column(Modifier.fillMaxWidth().onGloballyPositioned { BlankProbe.bottom(it.boundsInRoot().bottom) }, verticalArrangement = Arrangement.spacedBy(24.dp), content = content)
+        }
+    }
+}
+
+/**
+ * Short-page blank (profile D44, 「空白的量法」): (content top - window top + window bottom - content bottom) / window
+ * height, logged as `LAYOUT <page> blank=..%` for the ui-audit table. Content = header top .. last control bottom.
+ */
+internal object BlankProbe {
+    var page = ""
+    var windowH = 0f
+    var top = 0f
+    private var last = ""
+    fun bottom(b: Float) {
+        if (windowH <= 0f) return
+        val blank = (top + (windowH - b)) / windowH * 100f
+        val line = "LAYOUT $page blank=${"%.1f".format(blank)}% top=${top.toInt()} bottom=${b.toInt()} H=${windowH.toInt()}"
+        if (line != last) { last = line; Log.i(TAG, line) }
     }
 }
 
@@ -136,19 +158,19 @@ private fun Header(settings: Settings, graph: Graph, tag: String, showSettings: 
 
 /** The big one-line status card (session / summary / focus done). */
 @Composable
-private fun StatusCard(big: String, small: String?, tag: String, bigLines: Int = 1) {
+private fun StatusCard(big: String, small: String?, tag: String, bigLines: Int = 1, minLines: Int = 1) {
     Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(ZenColors.PrimaryContainer).padding(horizontal = 20.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(ZenColors.PrimaryContainer).padding(horizontal = 20.dp, vertical = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Txt(big, "$tag/big", style = PicoTheme.typography.headlineMedium, color = ZenColors.Ink, maxLines = bigLines)
+        Txt(big, "$tag/big", style = PicoTheme.typography.headlineMedium, color = ZenColors.Ink, maxLines = bigLines, minLines = minLines)
         if (small != null) Txt(small, "$tag/small", style = PicoTheme.typography.bodyMedium, color = ZenColors.InkSecondary, maxLines = 2)
     }
 }
 
 @Composable
-private fun ButtonRow(content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp), content = content)
+private fun ButtonRow(modifier: Modifier = Modifier, content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit) {
+    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp), content = content)
 }
 
 private fun mmss(s: Int): String = "%d:%02d".format(s / 60, s % 60)
@@ -165,7 +187,7 @@ private fun HomePage(ui: UiState, settings: Settings, graph: Graph) {
                 { p -> graph.settings.update { it.copy(lastPattern = p) } }, Modifier.fillMaxWidth())
             Txt(patternTag(sel), "home/tagline", style = PicoTheme.typography.bodyMedium, color = ZenColors.InkSecondary, modifier = Modifier.fillMaxWidth(), align = TextAlign.Center)
         }
-        PrimaryButton(stringResource(R.string.btn_start_breath), "home/start", onClick = { graph.flow.startBreath(sel) }, modifier = Modifier.fillMaxWidth().height(72.dp), icon = R.drawable.ic_play_arrow)
+        PrimaryButton(stringResource(R.string.btn_start_breath), "home/start", onClick = { graph.flow.startBreath(sel) }, modifier = Modifier.fillMaxWidth().height(80.dp), icon = R.drawable.ic_play_arrow)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Segments(Settings.FOCUS_LENGTHS.map { it to stringResource(R.string.focus_min, it) }, settings.focusMin, "home/focus-len",
                 { m -> graph.settings.update { it.copy(focusMin = m) } }, Modifier.weight(1f), small = true)
@@ -180,7 +202,7 @@ private fun HomePage(ui: UiState, settings: Settings, graph: Graph) {
 private fun WelcomePage(settings: Settings, graph: Graph) {
     PageColumn({ Header(settings, graph, "s01") }) {
         StatusCard(stringResource(R.string.welcome), null, "s01", bigLines = 3)
-        PrimaryButton(stringResource(R.string.btn_start), "s01/start", onClick = { graph.flow.startBreath() }, modifier = Modifier.fillMaxWidth().height(72.dp), icon = R.drawable.ic_play_arrow)
+        PrimaryButton(stringResource(R.string.btn_start), "s01/start", onClick = { graph.flow.startBreath() }, modifier = Modifier.fillMaxWidth().height(80.dp), icon = R.drawable.ic_play_arrow)
     }
 }
 
@@ -197,9 +219,9 @@ private fun BreathPage(ui: UiState, settings: Settings, graph: Graph) {
     PageColumn({ Header(settings, graph, "session") }) {
         StatusCard(big, small, "session")
         ButtonRow {
-            if (ui.breath == BreathSt.PAUSED) PrimaryButton(stringResource(R.string.btn_resume), "session/resume", onClick = { graph.flow.resume() }, modifier = Modifier.weight(1f).height(72.dp), icon = R.drawable.ic_play_arrow)
-            else SecondaryButton(stringResource(R.string.btn_pause), "session/pause", onClick = { graph.flow.pause() }, modifier = Modifier.weight(1f).height(72.dp), icon = R.drawable.ic_pause)
-            SecondaryButton(stringResource(R.string.btn_end), "session/end", onClick = { graph.flow.endBreath() }, modifier = Modifier.weight(1f).height(72.dp), icon = R.drawable.ic_stop)
+            if (ui.breath == BreathSt.PAUSED) PrimaryButton(stringResource(R.string.btn_resume), "session/resume", onClick = { graph.flow.resume() }, modifier = Modifier.weight(1f).height(80.dp), icon = R.drawable.ic_play_arrow)
+            else SecondaryButton(stringResource(R.string.btn_pause), "session/pause", onClick = { graph.flow.pause() }, modifier = Modifier.weight(1f).height(80.dp), icon = R.drawable.ic_pause)
+            SecondaryButton(stringResource(R.string.btn_end), "session/end", onClick = { graph.flow.endBreath() }, modifier = Modifier.weight(1f).height(80.dp), icon = R.drawable.ic_stop)
         }
     }
 }
@@ -220,8 +242,8 @@ private fun SummaryPage(ui: UiState, settings: Settings, graph: Graph) {
     PageColumn({ Header(settings, graph, "summary") }) {
         StatusCard(big, source, "summary", bigLines = 2)
         ButtonRow {
-            PrimaryButton(stringResource(R.string.btn_again), "summary/again", onClick = { graph.flow.startBreath(s.pattern) }, modifier = Modifier.weight(1f).height(72.dp), icon = R.drawable.ic_replay)
-            SecondaryButton(stringResource(R.string.btn_done), "summary/done", onClick = { graph.flow.summaryDone() }, modifier = Modifier.weight(1f).height(72.dp), icon = R.drawable.ic_check)
+            PrimaryButton(stringResource(R.string.btn_again), "summary/again", onClick = { graph.flow.startBreath(s.pattern) }, modifier = Modifier.weight(1f).height(80.dp), icon = R.drawable.ic_replay)
+            SecondaryButton(stringResource(R.string.btn_done), "summary/done", onClick = { graph.flow.summaryDone() }, modifier = Modifier.weight(1f).height(80.dp), icon = R.drawable.ic_check)
         }
     }
 }
@@ -237,20 +259,20 @@ private fun FocusPage(ui: UiState, settings: Settings, graph: Graph) {
             stringResource(if (paused) R.string.focus_paused_sub else R.string.focus_sub), "focus",
         )
         ButtonRow {
-            if (paused) PrimaryButton(stringResource(R.string.btn_resume), "focus/resume", onClick = { graph.flow.focusResume() }, modifier = Modifier.weight(1f).height(72.dp), icon = R.drawable.ic_play_arrow)
-            else SecondaryButton(stringResource(R.string.btn_pause), "focus/pause", onClick = { graph.flow.focusPause() }, modifier = Modifier.weight(1f).height(72.dp), icon = R.drawable.ic_pause)
-            SecondaryButton(stringResource(R.string.btn_drop), "focus/drop", onClick = { Ui.confirm = Confirm.GIVE_UP }, modifier = Modifier.weight(1f).height(72.dp), icon = R.drawable.ic_stop)
+            if (paused) PrimaryButton(stringResource(R.string.btn_resume), "focus/resume", onClick = { graph.flow.focusResume() }, modifier = Modifier.weight(1f).height(80.dp), icon = R.drawable.ic_play_arrow)
+            else SecondaryButton(stringResource(R.string.btn_pause), "focus/pause", onClick = { graph.flow.focusPause() }, modifier = Modifier.weight(1f).height(80.dp), icon = R.drawable.ic_pause)
+            SecondaryButton(stringResource(R.string.btn_drop), "focus/drop", onClick = { Ui.confirm = Confirm.GIVE_UP }, modifier = Modifier.weight(1f).height(80.dp), icon = R.drawable.ic_stop)
         }
     }
 }
 
 @Composable
-private fun FocusDonePage(settings: Settings, graph: Graph) {
+private fun FocusDonePage(ui: UiState, settings: Settings, graph: Graph) {
     PageColumn({ Header(settings, graph, "s07") }) {
-        StatusCard(stringResource(R.string.focus_done), null, "s07", bigLines = 2)
+        StatusCard(stringResource(R.string.focus_done), stringResource(R.string.focus_today, ui.today.focusDone), "s07", bigLines = 2)
         ButtonRow {
-            PrimaryButton(stringResource(R.string.btn_breathe_1), "s07/breathe", onClick = { graph.flow.focusDoneBreathe() }, modifier = Modifier.weight(1f).height(72.dp), icon = R.drawable.ic_play_arrow)
-            SecondaryButton(stringResource(R.string.btn_not_now), "s07/later", onClick = { graph.flow.focusDoneLater() }, modifier = Modifier.weight(1f).height(72.dp))
+            PrimaryButton(stringResource(R.string.btn_breathe_1), "s07/breathe", onClick = { graph.flow.focusDoneBreathe() }, modifier = Modifier.weight(1f).height(80.dp), icon = R.drawable.ic_play_arrow)
+            SecondaryButton(stringResource(R.string.btn_not_now), "s07/later", onClick = { graph.flow.focusDoneLater() }, modifier = Modifier.weight(1f).height(80.dp))
         }
     }
 }
@@ -264,23 +286,24 @@ private fun SettingsPage(ui: UiState, settings: Settings, graph: Graph) {
     val styles = listOf(Style.GLAZE to stringResource(R.string.style_glaze), Style.BRASS to stringResource(R.string.style_brass), Style.MOSS to stringResource(R.string.style_moss))
     val d = ui.today
     val pct = if (d.syncScored > 0) d.syncMatched * 100 / d.syncScored else 0
-    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(Modifier.fillMaxWidth().height(64.dp), verticalAlignment = Alignment.CenterVertically) {
+    // longest page = the window height (design heights.settings): rows 52 dp (controls >= 48 dp), 6 dp apart, 10 dp window padding
+    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(Modifier.fillMaxWidth().height(64.dp).onGloballyPositioned { BlankProbe.top = it.boundsInRoot().top }, verticalAlignment = Alignment.CenterVertically) {
             SecondaryButton(stringResource(R.string.btn_back), "settings/back", onClick = { Ui.page = Page.HOME }, icon = R.drawable.ic_arrow_back)
         }
-        OptionRow(stringResource(R.string.settings_language), "settings/lang") {
-            Segments(langs, settings.language, "settings/lang", { v -> graph.settings.update { it.copy(language = v) } }, Modifier.weight(1f), small = true)
+        OptionRow(stringResource(R.string.settings_language), "settings/lang", rowHeight = 52.dp) {
+            Segments(langs, settings.language, "settings/lang", { v -> graph.settings.update { it.copy(language = v) } }, Modifier.weight(1f), small = true, height = 52.dp)
         }
-        OptionRow(stringResource(R.string.settings_volume), "settings/volume") {
-            Segments(vols, settings.volume, "settings/volume", { v -> graph.settings.update { it.copy(volume = v) } }, Modifier.weight(1f), small = true)
+        OptionRow(stringResource(R.string.settings_volume), "settings/volume", rowHeight = 52.dp) {
+            Segments(vols, settings.volume, "settings/volume", { v -> graph.settings.update { it.copy(volume = v) } }, Modifier.weight(1f), small = true, height = 52.dp)
         }
-        OptionRow(stringResource(R.string.settings_style), "settings/style") {
-            Segments(styles, settings.style, "settings/style", { v -> graph.settings.update { it.copy(style = v) } }, Modifier.weight(1f), small = true)
+        OptionRow(stringResource(R.string.settings_style), "settings/style", rowHeight = 52.dp) {
+            Segments(styles, settings.style, "settings/style", { v -> graph.settings.update { it.copy(style = v) } }, Modifier.weight(1f), small = true, height = 52.dp)
         }
-        SwitchRow(stringResource(R.string.settings_handsfree), "settings/handsfree", settings.handsFree) { v -> graph.settings.update { it.copy(handsFree = v) } }
+        SwitchRow(stringResource(R.string.settings_handsfree), "settings/handsfree", settings.handsFree, { v -> graph.settings.update { it.copy(handsFree = v) } }, rowHeight = 52.dp)
         Txt(stringResource(R.string.today_line, (d.breathSeconds + 30) / 60, pct, d.focusDone), "settings/today", style = PicoTheme.typography.bodyMedium,
-            color = ZenColors.InkSecondary, modifier = Modifier.fillMaxWidth().height(28.dp))
-        ButtonRow {
+            color = ZenColors.InkSecondary, modifier = Modifier.fillMaxWidth().height(24.dp))
+        ButtonRow(Modifier.onGloballyPositioned { BlankProbe.bottom(it.boundsInRoot().bottom) }) {
             SecondaryButton(stringResource(R.string.btn_clear), "settings/clear", onClick = { Ui.confirm = Confirm.CLEAR }, modifier = Modifier.weight(1f), icon = R.drawable.ic_delete)
             SecondaryButton(stringResource(R.string.btn_quit), "settings/quit", onClick = { Ui.confirm = Confirm.QUIT }, modifier = Modifier.weight(1f), danger = true, icon = R.drawable.ic_logout)
         }
@@ -290,7 +313,7 @@ private fun SettingsPage(ui: UiState, settings: Settings, graph: Graph) {
 // ---------------------------------------------------------------------------------------------------- confirm (S11 + clear + give up)
 
 @Composable
-private fun ConfirmPage(kind: Confirm, ui: UiState, graph: Graph) {
+private fun ConfirmPage(kind: Confirm, ui: UiState, settings: Settings, graph: Graph) {
     val context = LocalContext.current
     val focusing = ui.focus == FocusSt.RUNNING || ui.focus == FocusSt.PAUSED
     val text = stringResource(
@@ -300,8 +323,8 @@ private fun ConfirmPage(kind: Confirm, ui: UiState, graph: Graph) {
             Confirm.GIVE_UP -> R.string.confirm_give_up
         },
     )
-    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(40.dp, Alignment.CenterVertically)) {
-        Txt(text, "confirm/${kind.name.lowercase()}", style = PicoTheme.typography.headlineMedium, modifier = Modifier.fillMaxWidth(), maxLines = 2, align = TextAlign.Center)
+    PageColumn({ Header(settings, graph, "confirm", showSettings = false) }) {
+        StatusCard(text, null, "confirm/${kind.name.lowercase()}", bigLines = 2, minLines = 2)
         ButtonRow {
             when (kind) {
                 Confirm.QUIT -> {
@@ -309,16 +332,16 @@ private fun ConfirmPage(kind: Confirm, ui: UiState, graph: Graph) {
                         if (focusing) graph.flow.focusGiveUp()
                         Ui.confirm = null
                         exitApp(context, graph)
-                    }, modifier = Modifier.weight(1f).height(72.dp), danger = true, icon = R.drawable.ic_logout)
-                    PrimaryButton(stringResource(R.string.btn_stay), "confirm/stay", onClick = { Ui.confirm = null }, modifier = Modifier.weight(1f).height(72.dp))
+                    }, modifier = Modifier.weight(1f).height(80.dp), danger = true, icon = R.drawable.ic_logout)
+                    PrimaryButton(stringResource(R.string.btn_stay), "confirm/stay", onClick = { Ui.confirm = null }, modifier = Modifier.weight(1f).height(80.dp))
                 }
                 Confirm.CLEAR -> {
-                    SecondaryButton(stringResource(R.string.btn_ok), "confirm/clear-ok", onClick = { graph.flow.clearHistory(); graph.saveNow("clear"); Ui.confirm = null }, modifier = Modifier.weight(1f).height(72.dp), danger = true, icon = R.drawable.ic_delete)
-                    PrimaryButton(stringResource(R.string.btn_not_yet), "confirm/clear-no", onClick = { Ui.confirm = null }, modifier = Modifier.weight(1f).height(72.dp))
+                    SecondaryButton(stringResource(R.string.btn_ok), "confirm/clear-ok", onClick = { graph.flow.clearHistory(); graph.saveNow("clear"); Ui.confirm = null }, modifier = Modifier.weight(1f).height(80.dp), danger = true, icon = R.drawable.ic_delete)
+                    PrimaryButton(stringResource(R.string.btn_not_yet), "confirm/clear-no", onClick = { Ui.confirm = null }, modifier = Modifier.weight(1f).height(80.dp))
                 }
                 Confirm.GIVE_UP -> {
-                    SecondaryButton(stringResource(R.string.btn_ok), "confirm/giveup-ok", onClick = { graph.flow.focusGiveUp(); Ui.confirm = null }, modifier = Modifier.weight(1f).height(72.dp), danger = true, icon = R.drawable.ic_stop)
-                    PrimaryButton(stringResource(R.string.btn_not_yet), "confirm/giveup-no", onClick = { Ui.confirm = null }, modifier = Modifier.weight(1f).height(72.dp))
+                    SecondaryButton(stringResource(R.string.btn_ok), "confirm/giveup-ok", onClick = { graph.flow.focusGiveUp(); Ui.confirm = null }, modifier = Modifier.weight(1f).height(80.dp), danger = true, icon = R.drawable.ic_stop)
+                    PrimaryButton(stringResource(R.string.btn_not_yet), "confirm/giveup-no", onClick = { Ui.confirm = null }, modifier = Modifier.weight(1f).height(80.dp))
                 }
             }
         }
@@ -342,7 +365,12 @@ private fun VolumeClosedPage(settings: Settings, graph: Graph) {
     if (Ui.page == Page.SETTINGS) { SettingsPage(graph.flow.ui.value, settings, graph); return }
     PageColumn({ Header(settings, graph, "s10") }) {
         StatusCard(stringResource(R.string.s10), null, "s10")
-        PrimaryButton(stringResource(R.string.btn_bring), "s10/bring", onClick = { graph.window.reopenVolume() }, modifier = Modifier.fillMaxWidth().height(72.dp), icon = R.drawable.ic_open_in_new)
+        PrimaryButton(stringResource(R.string.btn_bring), "s10/bring", onClick = { graph.window.reopenVolume() }, modifier = Modifier.fillMaxWidth().height(80.dp), icon = R.drawable.ic_open_in_new)
+        // design S10: the other actions stay visible but greyed until the orb is back
+        ButtonRow {
+            SecondaryButton(stringResource(R.string.btn_start_breath), "s10/start", onClick = {}, modifier = Modifier.weight(1f), enabled = false, icon = R.drawable.ic_play_arrow)
+            SecondaryButton(stringResource(R.string.btn_start_focus), "s10/focus", onClick = {}, modifier = Modifier.weight(1f), enabled = false, icon = R.drawable.ic_timer)
+        }
     }
 }
 

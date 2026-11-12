@@ -55,9 +55,9 @@
     <string name="vol_1">中</string>
     <string name="vol_2">高</string>
     <string name="settings_style">光球</string>
-    <string name="style_glaze">燕麦釉·胡桃</string>
-    <string name="style_brass">黄铜·黑石</string>
-    <string name="style_moss">苔石·板岩</string>
+    <string name="style_glaze">燕麦釉</string>
+    <string name="style_brass">黄铜黑石</string>
+    <string name="style_moss">苔石</string>
     <string name="settings_handsfree">闭眼跟</string>
     <string name="today_line">今天 呼吸 %1$d 分钟 · 合拍 %2$d%% · 专注 %3$d 个</string>
     <string name="btn_clear">清空记录</string>
@@ -72,4 +72,5 @@
     <string name="btn_not_yet">再想想</string>
     <string name="s10">光球收起来了。</string>
     <string name="btn_bring">把光球放回来</string>
+    <string name="focus_today">今天第 %d 个专注。</string>
 </resources>

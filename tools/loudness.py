@@ -1,21 +1,20 @@
-"""Loudness evidence (B20 / ui_gates loudness, design sound.levels / M8). Rendered, not recorded: kj-mbp-m5 has no
-audio loopback from the emulator. Uses the app's default gains (volume step 1 = 0.70; SoundPlayer LEVEL / BALL_LEVEL /
-RAKE_LEVEL) on the shipped WAVs.
+"""Loudness evidence (B20 / ui_gates loudness, design sound.loudness). RENDERED, NOT RECORDED: kj-mbp-m5 has no audio
+loopback from the emulator. Uses the app's default gains (volume 「中」 = 0.75 x SoundPlayer.LEVEL) on the shipped WAVs.
 
   ~/.factory-venv/bin/python tools/loudness.py OUT_DIR VERSION
 
-loudness-<v>.wav       the action sounds of a typical minute, back to back (rake stroke 2 s, click, three stone
-                        thuds 90 ms apart, smoothing sweep), silences trimmed: what ui_gates measures (voiced RMS / peak)
-loudness-ball-<v>.wav  30 s of the ball rolling at the default 2 cm/s (BALL_LEVEL 0.35 x 0.70 x sqrt(1)), whole-file RMS
-burst-<v>.wav          one event 5 times 80 ms apart with the one-instance rule (D51)
+loudness-<v>.wav   the event sounds of a round back to back (inhale bell, exhale bell, tick, round-done bell, focus-end
+                   bell), silences trimmed: what ui_gates measures (voiced RMS: 20 ms windows above peak -30 dB)
+burst-<v>.wav      the tick 5 times 80 ms apart with the one-instance rule (D51: a new one stops the previous)
 """
 import os, sys, wave
 import numpy as np
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SND = os.path.join(ROOT, "app", "src", "main", "assets", "sounds")
-SR = 22050
-VOL = 0.70
+SR = 44100
+VOL = 0.75
+LEVEL = {"inhale": 1.0, "exhale": 1.0, "tick": 1.0, "done": 1.0, "focus_end": 1.0}
 
 
 def load(n):
@@ -32,31 +31,44 @@ def save(p, x):
 def db(v): return 20 * np.log10(v + 1e-12)
 
 
-def voiced_rms(x):
-    win = 882; peak = np.max(np.abs(x))
-    e = [np.mean(x[k:k + win] ** 2) for k in range(0, len(x) - win + 1, win)]
-    v = [q for q in e if q >= (peak * 0.0316) ** 2] or e
+def voiced(x):
+    win = int(0.02 * SR); peak = np.max(np.abs(x))
+    e = np.array([np.mean(x[k:k + win] ** 2) for k in range(0, len(x) - win + 1, win)])
+    v = e[e >= (peak * 0.0316) ** 2]
     return db(np.sqrt(np.mean(v))), db(peak)
 
 
-out, ver = sys.argv[1], sys.argv[2]
-gap = np.zeros(int(SR * 0.04))
-parts = [load("rake")[:SR * 2] * 1.0 * VOL, gap, load("click") * 0.8 * VOL, gap]
-th = np.zeros(int(SR * 0.6))
-for i, n in enumerate(["thud", "thud_2", "thud_3"]):
-    x = load(n) * VOL; o = int(SR * 0.09 * i); th[o:o + len(x)] += x
-parts += [th, gap, load("smooth") * VOL]
-act = np.concatenate(parts)
-save(os.path.join(out, f"loudness-{ver}.wav"), act)
-r, p = voiced_rms(act)
-print(f"actions (voiced): RMS {r:.1f} dBFS, peak {p:.1f} dBFS")
+def trim_quiet(x):
+    """Keep the voiced part only (the gate's 「发声段」): drop the tail once it is 30 dB under this sound's peak."""
+    win = int(0.02 * SR); peak = np.max(np.abs(x)); keep = 0
+    for k in range(0, len(x) - win + 1, win):
+        if np.sqrt(np.mean(x[k:k + win] ** 2)) >= peak * 0.0316: keep = k + win
+    return x[:keep]
 
-ball = np.tile(load("ball_roll"), 8)[:SR * 30] * 0.35 * VOL
-save(os.path.join(out, f"loudness-ball-{ver}.wav"), ball)
-print(f"ball loop 30 s: RMS {db(np.sqrt(np.mean(ball ** 2))):.1f} dBFS, peak {db(np.max(np.abs(ball))):.1f} dBFS")
 
-b = np.zeros(int(SR * 0.8)); x = load("thud") * VOL
-for i in range(5):
-    o = int(SR * 0.08 * i); b[o:] = 0 if i else b[o:]; b[o:o + len(x)] = x[:len(b) - o]
-save(os.path.join(out, f"burst-{ver}.wav"), b)
-print(f"burst x5 (one instance): peak {db(np.max(np.abs(b))):.1f} dBFS")
+def main():
+    out, ver = sys.argv[1], sys.argv[2]
+    os.makedirs(out, exist_ok=True)
+    parts, rows = [], []
+    for n in ["inhale", "exhale", "tick", "done", "focus_end"]:
+        x = load(n) * VOL * LEVEL[n]
+        r, p = voiced(x)
+        rows.append(f"{n:10s} voiced RMS {r:6.1f} dBFS  peak {p:6.1f} dBFS")
+        parts += [trim_quiet(x), np.zeros(int(0.05 * SR))]
+    seq = np.concatenate(parts)
+    save(os.path.join(out, f"loudness-{ver}.wav"), seq)
+    r, p = voiced(seq)
+    t = load("tick") * VOL
+    burst = np.zeros(int(0.08 * SR) * 4 + len(t))
+    for i in range(5):
+        a = int(0.08 * SR) * i
+        burst[a:] = 0  # one instance: the previous stops when the next starts
+        burst[a:a + len(t)] = t[: len(burst) - a]
+    save(os.path.join(out, f"burst-{ver}.wav"), burst)
+    br, bp = voiced(burst)
+    print("\n".join(rows))
+    print(f"loudness-{ver}.wav voiced RMS {r:.1f} dBFS peak {p:.1f} dBFS (rendered at volume 中 = {VOL})")
+    print(f"burst-{ver}.wav 5 ticks / 80 ms peak {bp:.1f} dBFS")
+
+
+main()

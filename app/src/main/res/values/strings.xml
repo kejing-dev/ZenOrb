@@ -72,4 +72,5 @@
     <string name="btn_not_yet">Not yet</string>
     <string name="s10">The orb\'s tucked away.</string>
     <string name="btn_bring">Bring the orb back</string>
+    <string name="focus_today">Focus #%d today.</string>
 </resources>

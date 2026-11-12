@@ -169,7 +169,7 @@ class SoundPlayer(private val context: Context) {
     fun release() = runCatching { pool.release() }
 
     companion object {
-        val LEVEL = mapOf(Sfx.INHALE to 0.8f, Sfx.EXHALE to 0.8f, Sfx.TICK to 1.0f, Sfx.DONE to 1.0f, Sfx.FOCUS_END to 1.0f)
+        val LEVEL = mapOf(Sfx.INHALE to 1.0f, Sfx.EXHALE to 1.0f, Sfx.TICK to 1.0f, Sfx.DONE to 1.0f, Sfx.FOCUS_END to 1.0f)
         val JITTER = mapOf(Sfx.INHALE to 0.03f, Sfx.EXHALE to 0.03f, Sfx.TICK to 0.04f, Sfx.DONE to 0f, Sfx.FOCUS_END to 0f)
     }
 }
