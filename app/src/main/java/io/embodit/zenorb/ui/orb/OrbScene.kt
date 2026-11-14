@@ -49,7 +49,9 @@ internal fun rgb4(rgb: Int, k: Float = 1f) = Color4((rgb shr 16 and 255) / 255f 
 /** Hit holder names (one place; resolved by name for the board-input template and the hit-replay unit test). */
 object Names {
     const val ORB = "orb"
-    fun target(name: String): String? = name.takeIf { it == ORB }
+    /** The recall stone 「⋯」 left front of the cradle: a tap reopens the control window (design v5 C8). */
+    const val RECALL = "recall"
+    fun target(name: String): String? = name.takeIf { it == ORB || it == RECALL }
 }
 
 /**
@@ -62,7 +64,8 @@ object Names {
  *   │   └ orbModel:<STYLE> (GLB, one enabled)
  *   ├ ringPivot (scaled to the guide radius) → ringThin / ringThick (true torus, no collider)
  *   ├ arc:<STYLE> → 36 ten-degree segments on the cradle rim (focus remaining)
- *   ├ tag (text quad right of the orb), caption (text quad in front of the cradle, leaned back 20 deg)
+ *   ├ "recall" holder (0.077 box collider + Interactable + HoverEffect) → pebble + 3 dots 「⋯」 (style material)
+ *   ├ tag (text quad right of the orb), caption (text quad in front of the cradle, leaned back 20 deg), hover (above the stone)
  *   └ keyLight
  * ```
  * Compose never drives motion: [onFrame] runs from the ECS system, ticks the flow and copies its OrbView here.
@@ -86,6 +89,18 @@ internal class OrbScene(private val context: Context, private val graph: Graph, 
     private var capEnt: Entity? = null
     private var tagMat: UnlitMaterial? = null
     private var capMat: UnlitMaterial? = null
+    private var hoverEnt: Entity? = null
+    private var hoverMat: UnlitMaterial? = null
+    private var stoneHolder: Entity? = null
+    private var stoneMat: PhysicallyBasedMaterial? = null
+    private var dotMat: PhysicallyBasedMaterial? = null
+    /** Pointer / gaze over the recall stone (set by the input listener; debug `hoverstone`). */
+    @Volatile var stoneHovered = false
+    private var hoverOnT = 0f
+    private var hoverOffT = 0f
+    private var hoverShown = false
+    private var stoneLit = false
+    @Volatile private var stonePressT = -1f
     private var shadowMat: PhysicallyBasedMaterial? = null
     private var arcMat: PhysicallyBasedMaterial? = null
     private var arcFadedMat: PhysicallyBasedMaterial? = null
@@ -109,6 +124,8 @@ internal class OrbScene(private val context: Context, private val graph: Graph, 
     private val texBusy = HashSet<String>()
     private var tagShown: String? = null
     private var capShown: String? = null
+    private var hoverTextShown: String? = null
+    private var shownEmit = -1f
 
     init {
         root.addChild(content)
@@ -127,12 +144,16 @@ internal class OrbScene(private val context: Context, private val graph: Graph, 
                     Meshes.torus(R0, 0.0035f).create("ringThick").keep(),
                     Meshes.quad(Geo.TAG_W, Geo.TAG_H, leftAnchored = true).create("tagQuad").keep(),
                     Meshes.quad(Geo.CAP_W, Geo.CAP_H, leftAnchored = false).create("capQuad").keep(),
+                    Meshes.quad(Geo.HOVER_W, Geo.HOVER_H, leftAnchored = false).create("hoverQuad").keep(),
+                    Meshes.pebble(Geo.STONE_W, Geo.STONE_H, Geo.STONE_D).create("pebble").keep(),
+                    Meshes.dome(0.0025f, 0.0012f).create("dot").keep(),
                 )
             }
             val arcMeshes = Style.entries.associateWith { st ->
                 async(io) { (0 until 36).map { i -> Meshes.torus(st.rimR, 0.0018f, (i * 10.0 * PI / 180).toFloat(), (10.0 * PI / 180).toFloat(), 6, 8).create("arc$i").keep() } }
             }
             val shape = async(io) { (PhysicsMaterialResource().keep()) to ShapeResource.createSphere(Geo.HIT_R).keep() }
+            val stoneShape = async(io) { ShapeResource.createBox(Vector3(Geo.STONE_HIT, Geo.STONE_HIT, Geo.STONE_HIT)).keep() }
             val mats = async(io) {
                 shadowMat = PhysicallyBasedMaterial.create().apply { setBaseColor(rgb4(s0.style.shadow)); setRoughness(1f); setMetallic(0f) }.keep()
                 ringMat = PhysicallyBasedMaterial.create().apply { setBaseColor(rgb4(s0.style.ring)); setRoughness(0.5f); setMetallic(0.2f) }.keep()
@@ -142,7 +163,9 @@ internal class OrbScene(private val context: Context, private val graph: Graph, 
                 fun text() = UnlitMaterial.create(BlendingMode.TRANSPARENT).apply {
                     setBaseColor(Color4(1f, 1f, 1f, 1f)); setCullingMode(MaterialCullingMode.NONE); setApplyToneMapping(false)
                 }.keep()
-                tagMat = text(); capMat = text()
+                tagMat = text(); capMat = text(); hoverMat = text()
+                stoneMat = PhysicallyBasedMaterial.create().apply { setBaseColor(rgb4(s0.style.stone)); setRoughness(0.72f); setMetallic(0f) }.keep()
+                dotMat = PhysicallyBasedMaterial.create().apply { setBaseColor(rgb4(s0.style.accent, 1.15f)); setRoughness(0.55f); setMetallic(0.3f) }.keep()
             }
             val glbs = Style.entries.flatMap { st ->
                 listOf(
@@ -150,8 +173,10 @@ internal class OrbScene(private val context: Context, private val graph: Graph, 
                     async { "orb" to st to runCatching { Entity.loadSuspend("asset://models/orb_${st.name.lowercase()}.glb") }.onFailure { Log.e(TAG, "MODEL orb $st", it) }.getOrNull() },
                 )
             }
-            awaitAll(meshes, shape, mats)
-            val (shadowM, thinM, thickM, tagQ, capQ) = meshes.await()
+            awaitAll(meshes, shape, mats, stoneShape)
+            val ms = meshes.await()
+            val shadowM = ms[0]; val thinM = ms[1]; val thickM = ms[2]; val tagQ = ms[3]; val capQ = ms[4]
+            val hoverQ = ms[5]; val pebbleM = ms[6]; val dotM = ms[7]
             val (physics, sphere) = shape.await()
 
             ModelEntity(shadowM, shadowMat!!).apply { setName("shadow"); content.addChild(this) }
@@ -193,6 +218,19 @@ internal class OrbScene(private val context: Context, private val graph: Graph, 
                 at(0f, Geo.CAP_Y, Geo.CAP_Z)
                 transform().setQuaternion(Quat(Vector3(1f, 0f, 0f), (-Geo.CAP_TILT_DEG * PI / 180).toFloat()))
             }
+            // recall stone: holder carries the collider (box centred 0.0385 up, so it sits on the table) + system hover
+            val stone = Entity().apply {
+                setName(Names.RECALL)
+                components.set(CollisionComponent(collisionShape = listOf(stoneShape.await().offsetByTranslation(Vector3(0f, Geo.STONE_HIT / 2, 0f)).keep()), physicsMaterial = physics))
+                components.set(InteractableComponent())
+                components.set(HoverEffectComponent())
+                content.addChild(this)
+                at(Geo.STONE_X, 0f, Geo.STONE_Z)
+            }
+            ModelEntity(pebbleM, stoneMat!!).apply { setName("pebble"); stone.addChild(this) }
+            for (k in -1..1) ModelEntity(dotM, dotMat!!).apply { setName("dot$k"); stone.addChild(this); at(k * 0.009f, Geo.STONE_H - 0.0008f, 0.002f) }
+            stoneHolder = stone
+            hoverEnt = ModelEntity(hoverQ, hoverMat!!).apply { setName("hover"); enabled = false; content.addChild(this); at(Geo.HOVER_X, Geo.HOVER_Y, Geo.STONE_Z) }
             buildLight()
         }
         applyStyle(s0.style)
@@ -219,23 +257,29 @@ internal class OrbScene(private val context: Context, private val graph: Graph, 
         val zh = isZh(graph.settings.value)
         scope.launch(Dispatchers.IO) {
             val t0 = SystemClock.elapsedRealtime()
-            for (h in Hint.all() + listOf(Hint.CapCount(1, 18), Hint.Tag(io.embodit.zenorb.domain.Phase.IN, 4))) {
-                val isTag = h is Hint.Tag || h == Hint.TagPaused
-                texture(h.text(zh), isTag)
+            for (h in Hint.all() + listOf(Hint.CapCount(1, 18), Hint.Tag(io.embodit.zenorb.domain.Phase.IN, 4), Hint.HoverRecall)) {
+                texture(h.text(zh), kindOf(h))
             }
             Log.i(TAG, "PREWARM hint textures ${texCache.size} in ${SystemClock.elapsedRealtime() - t0} ms")
         }
     }
 
-    private fun key(text: String, tag: Boolean) = "$text|${if (tag) "t" else "c"}|$testF"
+    /** Text quad kinds: 't' tag beside the orb, 'c' caption in front, 'h' hover word over the recall stone. */
+    private fun kindOf(h: Hint): Char = when (h) { is Hint.Tag, Hint.TagPaused -> 't'; Hint.HoverRecall -> 'h'; else -> 'c' }
+
+    private fun key(text: String, kind: Char) = "$text|$kind|$testF"
 
     /** Cached texture for [text]; null while it is being made (created on IO). */
-    private fun texture(text: String, tag: Boolean): TextureResource? {
-        val k = key(text, tag)
+    private fun texture(text: String, kind: Char): TextureResource? {
+        val k = key(text, kind)
         synchronized(texCache) { texCache[k]?.let { return it }; if (!texBusy.add(k)) return null }
         val make = {
             val s = if (testF) "F↑ $text" else text
-            val bmp = if (tag) HintTex.draw(s, Geo.TAG_W, Geo.TAG_H, true) else HintTex.draw(s, Geo.CAP_W, Geo.CAP_H, false)
+            val bmp = when (kind) {
+                't' -> HintTex.draw(s, Geo.TAG_W, Geo.TAG_H, true)
+                'h' -> HintTex.draw(s, Geo.HOVER_W, Geo.HOVER_H, false)
+                else -> HintTex.draw(s, Geo.CAP_W, Geo.CAP_H, false)
+            }
             val t = runCatching { TextureResource.create(bmp).keep() }.onFailure { Log.w(TAG, "TEX $text: $it") }.getOrNull()
             synchronized(texCache) { texBusy.remove(k); if (t != null) texCache[k] = t }
         }
@@ -263,8 +307,10 @@ internal class OrbScene(private val context: Context, private val graph: Graph, 
         ringBandMat?.setBaseColor(rgb4(st.ring, 1.08f))
         arcMat?.setBaseColor(rgb4(st.accent))
         arcFadedMat?.setBaseColor(rgb4(st.accent, 0.45f))
+        stoneMat?.setBaseColor(rgb4(st.stone, if (stoneLit) 1.15f else 1f))
+        dotMat?.setBaseColor(rgb4(st.accent, 1.15f))
         for ((k, segs) in arcs) if (k != st) segs.forEach { it.enabled = false }
-        shownStyle = st; shownArcN = -1; shownTint = -1f
+        shownStyle = st; shownArcN = -1; shownTint = -1f; shownEmit = -1f
         Log.i(TAG, "STYLE $st")
     }
 
@@ -284,15 +330,22 @@ internal class OrbScene(private val context: Context, private val graph: Graph, 
             val s = Geo.scale(v.f)
             val y = Geo.orbY(v.f) + v.bump
             orbHolder?.let { h -> h.at(0f, y, 0f); h.transform().setScaleVector(Vector3(s, s, s)) }
-            // warm tint in band (design feedback: base colour 12 % toward the style's warm colour) and 20 % dim while focusing
-            val tint = ((v.warm * 100).toInt() * 1000 + (v.dim * 100).toInt()).toFloat()
+            // the orb's own breath light (user 2026-11-13): brighter / warmer glow in, dimmer out, still in the holds;
+            // warm tint in band (design feedback: base colour 12 % toward the style's warm colour); 20 % dim while focusing
+            val tint = ((v.warm * 100).toInt() * 1_000_000 + (v.dim * 100).toInt() * 1000 + (v.glow * 200).toInt()).toFloat()
             if (tint != shownTint) {
                 shownTint = tint
-                val k = 1f - 0.2f * v.dim
+                val k = (1f - 0.2f * v.dim) * io.embodit.zenorb.domain.OrbMotion.brightness(v.glow)
                 val w = 0.12f * v.warm
                 fun ch(sh: Int) = (st.warm shr sh and 255) / 255f / 0.85f
                 val c = Color4((1 - w + w * ch(16)) * k, (1 - w + w * ch(8)) * k, (1 - w + w * ch(0)) * k, 1f)
                 orbMats[st]?.forEach { m -> runCatching { m.setBaseColor(c) } }
+                val e = io.embodit.zenorb.domain.OrbMotion.emission(v.glow, v.inRound) * (1f - 0.5f * v.dim)
+                if (kotlin.math.abs(e - shownEmit) > 0.002f) {
+                    shownEmit = e
+                    val em = rgb4(st.warm, e)
+                    orbMats[st]?.forEach { m -> runCatching { m.setEmissiveColor(em) } }
+                }
             }
             // guide ring
             ringPivot?.let { p ->
@@ -319,23 +372,43 @@ internal class OrbScene(private val context: Context, private val graph: Graph, 
             capText = v.caption?.text(zh)
             tagEnt?.at(Geo.radius(v.f) + Geo.TAG_GAP, Geo.orbY(v.f), 0f)
         }
-        updateText(tagText, true)
-        updateText(capText, false)
+        updateText(tagText, 't')
+        updateText(capText, 'c')
+        stoneFrame(dt, zh)
     }
 
-    private fun updateText(text: String?, tag: Boolean) {
-        val e = (if (tag) tagEnt else capEnt) ?: return
-        val shown = if (tag) tagShown else capShown
-        if (text == null || text.isEmpty()) { if (e.enabled) e.enabled = false; if (tag) tagShown = null else capShown = null; return }
+    /** Recall stone: hover word after 0.15 s, gone 0.3 s after leaving, stone 15 % lighter; a press sinks it 2 mm (120 ms). */
+    private fun stoneFrame(dt: Float, zh: Boolean) {
+        val st = shownStyle ?: return
+        if (stoneHovered) { hoverOnT += dt; hoverOffT = 0f } else { hoverOffT += dt; hoverOnT = 0f }
+        val want = if (hoverShown) hoverOffT < 0.3f else hoverOnT >= 0.15f
+        if (want != hoverShown) { hoverShown = want; Log.i(TAG, "HOVER recall ${if (want) "on" else "off"}") }
+        if (want != stoneLit) { stoneLit = want; stoneMat?.setBaseColor(rgb4(st.stone, if (want) 1.15f else 1f)) }
+        updateText(if (hoverShown) Hint.HoverRecall.text(zh) else null, 'h')
+        val p = stonePressT
+        if (p >= 0f) {
+            val q = p + dt
+            stonePressT = if (q > 0.12f) -1f else q
+            stoneHolder?.at(Geo.STONE_X, if (q > 0.12f) 0f else -0.002f * kotlin.math.sin(PI.toFloat() * q / 0.12f), Geo.STONE_Z)
+        }
+    }
+
+    fun pressStone() { stonePressT = 0f }
+
+    private fun updateText(text: String?, kind: Char) {
+        val e = (when (kind) { 't' -> tagEnt; 'h' -> hoverEnt; else -> capEnt }) ?: return
+        val shown = when (kind) { 't' -> tagShown; 'h' -> hoverTextShown; else -> capShown }
+        fun mark(v: String?) { when (kind) { 't' -> tagShown = v; 'h' -> hoverTextShown = v; else -> capShown = v } }
+        if (text == null || text.isEmpty()) { if (e.enabled) e.enabled = false; mark(null); return }
         if (text == shown && e.enabled) return
-        val tex = texture(text, tag) ?: return      // keep the previous words for the one or two frames it takes
-        (if (tag) tagMat else capMat)?.setBaseColorTexture(tex)
+        val tex = texture(text, kind) ?: return      // keep the previous words for the one or two frames it takes
+        (when (kind) { 't' -> tagMat; 'h' -> hoverMat; else -> capMat })?.setBaseColorTexture(tex)
         e.enabled = true
-        if (tag) tagShown = text else capShown = text
-        Log.i(TAG, "HINT ${if (tag) "tag" else "caption"} \"$text\"")
+        mark(text)
+        Log.i(TAG, "HINT ${when (kind) { 't' -> "tag"; 'h' -> "hover"; else -> "caption" }} \"$text\"")
     }
 
-    fun refreshText() { tagShown = null; capShown = null }
+    fun refreshText() { tagShown = null; capShown = null; hoverTextShown = null }
 
     fun dispose() {
         synchronized(all) { all.forEach { runCatching { it.close() } }; all.clear() }

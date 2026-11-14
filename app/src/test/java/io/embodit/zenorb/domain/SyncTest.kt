@@ -23,7 +23,7 @@ class SyncTest {
             t += dt
         }
         j.closeBreath()
-        return j.matched() to j.scored()
+        return j.matched(1) to j.scored(1)
     }
 
     private val sloppy: List<Pair<String, (Float, (Float) -> Float, Random) -> Float>> = listOf(

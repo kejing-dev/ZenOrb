@@ -17,6 +17,9 @@ class HitReplayTest {
             assertNull(resolvePath(listOf("arc:$style:3", "arc:$style", "content"), Names::target))
         }
         assertEquals(Names.ORB, resolvePath(listOf("orb", "content"), Names::target))
+        // the recall stone (design v5 C8): the pebble and its dots resolve to it
+        for (n in listOf("pebble", "dot-1", "dot0", "dot1")) assertEquals(Names.RECALL, resolvePath(listOf(n, "recall", "content", "root"), Names::target))
+        assertNull(resolvePath(listOf("hover", "content", "root"), Names::target))
         for (n in listOf("shadow", "ringThin", "ringPivot", "tag", "caption")) assertNull(resolvePath(listOf(n, "content", "root"), Names::target))
     }
 }

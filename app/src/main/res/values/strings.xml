@@ -18,13 +18,12 @@
     <string name="btn_start_breath">Start breathing</string>
     <string name="focus_min">%d min</string>
     <string name="btn_start_focus">Start focus</string>
-    <string name="welcome">Pinch the orb. Lift to breathe in, lower to breathe out.</string>
+    <string name="welcome">Tap the orb and breathe with it.</string>
     <string name="btn_start">Start</string>
     <string name="ready_state">%s · Ready</string>
     <string name="ready_sub">Keep your hand low. Small moves count.</string>
     <string name="session_state">%1$s · %2$s</string>
     <string name="session_sub">Just watch the orb.</string>
-    <string name="handsfree_sub">Eyes closed. Drag the orb to take over.</string>
     <string name="paused_state">Paused</string>
     <string name="paused_sub">Paused. Pick it up anytime.</string>
     <string name="btn_pause">Pause</string>
@@ -35,9 +34,8 @@
     <string name="focus_paused_state">Focus · paused</string>
     <string name="focus_paused_sub">Paused. It\'ll wait for you.</string>
     <string name="btn_drop">Drop</string>
-    <string name="summary_big">Matched %1$d of %2$d</string>
-    <string name="summary_low">%d breaths done. Try a little slower next time.</string>
-    <string name="summary_handsfree">%1$d min, %2$d breaths.</string>
+    <string name="summary_big">%d breaths</string>
+    <string name="summary_low">You led %2$d, matched %1$d. Try it slower next time.</string>
     <string name="source_calm">About six slow breaths a minute is a common way to relax.</string>
     <string name="source_box">Box breathing: four counts in, hold, out, hold.</string>
     <string name="source_sleep">4-7-8 breathing. Four is enough. Stop if you feel dizzy.</string>
@@ -58,7 +56,6 @@
     <string name="style_glaze">Oat Glaze</string>
     <string name="style_brass">Brass</string>
     <string name="style_moss">Moss</string>
-    <string name="settings_handsfree">Eyes-closed mode</string>
     <string name="today_line">Today: %1$d min · %2$d%% matched · %3$d focus</string>
     <string name="btn_clear">Clear history</string>
     <string name="btn_quit">Quit ZenOrb</string>
@@ -73,4 +70,9 @@
     <string name="s10">The orb\'s tucked away.</string>
     <string name="btn_bring">Bring the orb back</string>
     <string name="focus_today">Focus #%d today.</string>
+    <string name="welcome_sub">Or lead: pinch it, lift to breathe in, lower to breathe out.</string>
+    <string name="follow_sub">Breathe with the orb. Pinch it to lead.</string>
+    <string name="summary_led">You led %2$d and matched %1$d.</string>
+    <string name="settings_ambient">Ambience (soft creek)</string>
+    <string name="btn_reopen">Reopen controls</string>
 </resources>

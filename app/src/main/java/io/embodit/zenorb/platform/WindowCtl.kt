@@ -28,6 +28,9 @@ class WindowCtl {
     private var reopenPending = false
     private var volumeReopenPending = false
     private val main = Handler(Looper.getMainLooper())
+    private var exiting = false
+    /** The control window was closed by the user (system ×), not by a reopen / exit: the volume says 「点 ⋯ 叫回控制窗」. */
+    var onClosedByUser: (() -> Unit)? = null
 
     fun attach(nav: SpatialNavigator) { navigator = nav }
     fun detach() { navigator = null }
@@ -48,10 +51,18 @@ class WindowCtl {
         runCatching { (navigator ?: panelNavigator)?.closeWindowContainer(Containers.CONTROL, Containers.CONTROL_TAG) }
     }
 
+    /** Recall stone / settings [重开控制窗] (design v5 T10): open it beside the orb, or put an open one back there. */
+    fun recall(why: String) {
+        Log.i(TAG, "WINDOW recall why=$why open=$panelOpen")
+        if (panelOpen) reopen() else open(why)
+    }
+
     fun onPanelLifecycle(event: String) {
         panelState = event
         Log.i(TAG, "WINDOW lifecycle $event")
-        if (reopenPending && event == "ON_DESTROY") { reopenPending = false; main.postDelayed({ open("reopen") }, 250) }
+        if (event != "ON_DESTROY") return
+        if (reopenPending) { reopenPending = false; main.postDelayed({ open("reopen") }, 250) }
+        else if (!exiting) onClosedByUser?.invoke()
     }
 
     fun onVolumeLifecycle(event: String) {
@@ -82,6 +93,7 @@ class WindowCtl {
 
     /** Exit (D26 / D44): close the control window and the orb volume. */
     fun closeAll() {
+        exiting = true
         val nav = navigator ?: panelNavigator ?: return
         runCatching { nav.closeWindowContainer(Containers.CONTROL, Containers.CONTROL_TAG) }.onFailure { Log.w(TAG, "EXIT close control: $it") }
         runCatching { navigator?.closeWindowContainer() }.onFailure { Log.w(TAG, "EXIT close orb: $it") }

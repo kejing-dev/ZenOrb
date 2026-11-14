@@ -15,7 +15,11 @@ sealed class Hint {
     data class CapCorrection(val c: Correction) : Hint()
     data object CapYourTurn : Hint()
     data class CapResult(val matched: Int, val of: Int) : Hint()
-    data class CapHandsFreeResult(val breaths: Int) : Hint()
+    data class CapFollowResult(val breaths: Int) : Hint()
+    data object CapLeadHint : Hint()
+    data object CapPaused : Hint()
+    data object CapControlsHint : Hint()
+    data object HoverRecall : Hint()
     data class CapFocusLeft(val min: Int) : Hint()
     data class CapFocusPaused(val min: Int) : Hint()
     data object CapFocusPlus : Hint()
@@ -27,8 +31,8 @@ sealed class Hint {
             else -> if (zh) "停 $n" else "Hold $n"
         }
         TagPaused -> if (zh) "暂停" else "Paused"
-        CapIdle -> if (zh) "捏住提起来吸气" else "Pinch & lift"
-        CapReady -> if (zh) "捏住光球" else "Pinch the orb"
+        CapIdle -> if (zh) "点一下，跟着呼吸" else "Tap to breathe"
+        CapReady -> "3 · 2 · 1"
         is CapCountdown -> listOf("3", "3 · 2", "3 · 2 · 1").getOrElse(shown.coerceIn(0, 2)) { "3 · 2 · 1" }
         is CapCount -> "$n / $of"
         is CapCorrection -> when (c) {
@@ -41,7 +45,11 @@ sealed class Hint {
         }
         CapYourTurn -> if (zh) "换你来" else "Your turn"
         is CapResult -> if (zh) "$matched/$of 合上" else "$matched/$of matched"
-        is CapHandsFreeResult -> if (zh) "跟了 $breaths 口" else "$breaths breaths"
+        is CapFollowResult -> if (zh) "跟了 $breaths 口" else "$breaths breaths"
+        CapLeadHint -> if (zh) "想自己来就捏住它" else "Pinch to lead"
+        CapPaused -> if (zh) "点球接着来" else "Tap to resume"
+        CapControlsHint -> if (zh) "点 ⋯ 叫回控制窗" else "⋯ = controls"
+        HoverRecall -> if (zh) "控制窗" else "Controls"
         is CapFocusLeft -> if (zh) "还剩 $min 分" else "$min min left"
         is CapFocusPaused -> if (zh) "停着 · $min 分" else "Paused $min min"
         CapFocusPlus -> if (zh) "专注 +1" else "Focus +1"
@@ -54,7 +62,8 @@ sealed class Hint {
             add(TagPaused); add(CapIdle); add(CapReady); for (i in 0..2) add(CapCountdown(i))
             for (c in Correction.entries) if (c != Correction.NONE) add(CapCorrection(c))
             add(CapYourTurn); add(CapFocusPlus)
-            add(CapCount(18, 18)); add(CapResult(17, 17)); add(CapHandsFreeResult(18))
+            add(CapCount(18, 18)); add(CapResult(17, 17)); add(CapFollowResult(18))
+            add(CapLeadHint); add(CapPaused); add(CapControlsHint)
             add(CapFocusLeft(50)); add(CapFocusPaused(50))
         }
     }

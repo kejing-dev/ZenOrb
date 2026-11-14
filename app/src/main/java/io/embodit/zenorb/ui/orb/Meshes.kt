@@ -104,4 +104,51 @@ internal object Meshes {
         m.tri(a, b, c); m.tri(a, c, d)
         return m
     }
+
+    /**
+     * The recall stone (design entities3d.recallStone): a flattened pebble, w x h x d, sitting on y = 0, its surface
+     * lumpy with a few low sines (fbm-like) so it reads as a stone and not a primitive. ~1.5k triangles, smooth normals.
+     */
+    fun pebble(w: Float, h: Float, d: Float, seg: Int = 40, rings: Int = 20): MeshData {
+        val m = MeshData((seg + 1) * (rings + 1))
+        fun bump(a: Double, b: Double): Double = 1.0 + 0.045 * sin(3 * a + 1.3) * cos(2 * b) + 0.03 * sin(5 * a + 2 * b + 0.7) + 0.02 * cos(7 * a - 3 * b)
+        for (j in 0..rings) {
+            val b = PI * j / rings - PI / 2          // -90 (bottom) .. +90 (top)
+            for (i in 0..seg) {
+                val a = 2 * PI * i / seg
+                val k = bump(a, b)
+                // flatter underside: the stone rests on the table
+                val cy = sin(b); val sy = if (cy < 0) cy * 0.35 else cy
+                val x = (w / 2 * cos(b) * sin(a) * k).toFloat()
+                val y = (h * (0.32 + 0.68 * sy) * k.coerceAtMost(1.04)).toFloat().coerceAtLeast(0f)
+                val z = (d / 2 * cos(b) * cos(a) * k).toFloat()
+                // ellipsoid normal (good enough for the lumps at this size)
+                val nx = (sin(a) * cos(b) / (w / 2)).toFloat(); val ny = (sin(b) / h).toFloat(); val nz = (cos(a) * cos(b) / (d / 2)).toFloat()
+                val l = kotlin.math.sqrt(nx * nx + ny * ny + nz * nz)
+                m.v(x, y, z, nx / l, ny / l, nz / l, i.toFloat() / seg, j.toFloat() / rings)
+            }
+        }
+        val k = seg + 1
+        for (j in 0 until rings) for (i in 0 until seg) {
+            val a = j * k + i; val b = a + k
+            m.tri(a, b, a + 1); m.tri(a + 1, b, b + 1)
+        }
+        return m
+    }
+
+    /** A small dome (the three dots 「⋯」 on top of the recall stone). */
+    fun dome(r: Float, h: Float, seg: Int = 16, rings: Int = 5): MeshData {
+        val m = MeshData((seg + 1) * (rings + 1))
+        for (j in 0..rings) {
+            val b = PI / 2 * j / rings
+            for (i in 0..seg) {
+                val a = 2 * PI * i / seg
+                val x = (r * cos(b) * sin(a)).toFloat(); val y = (h * sin(b)).toFloat(); val z = (r * cos(b) * cos(a)).toFloat()
+                m.v(x, y, z, (cos(b) * sin(a)).toFloat(), sin(b).toFloat(), (cos(b) * cos(a)).toFloat())
+            }
+        }
+        val k = seg + 1
+        for (j in 0 until rings) for (i in 0 until seg) { val a = j * k + i; val b = a + k; m.tri(a, b, a + 1); m.tri(a + 1, b, b + 1) }
+        return m
+    }
 }

@@ -105,6 +105,8 @@ data class Offset3M(val x: Float, val y: Float, val z: Float) {
 data class BoardInputConfig(
     /** A held pointer becomes a drag only after this much travel (metres); less than that is a tap (D27 forgiving). */
     val dragStartM: Float = 0.025f,
+    /** A press held longer than this without becoming a drag is not a tap (null = any length taps). */
+    val tapMaxMs: Long? = null,
     /** How far up the parent chain to look for an entity the resolver knows (GLB meshes hang below the collider). */
     val maxResolveDepth: Int = 10,
     val logTag: String = "BoardInput",
@@ -252,6 +254,8 @@ fun <T : Any> Modifier.boardInput(
                     if (dragging) {
                         log("DRAG end src=${startSrc.label} travel=${"%.3f".format(maxTravel)}m ${ms}ms")
                         currentListener.onDragEnd()
+                    } else if (config.tapMaxMs != null && ms > config.tapMaxMs) {
+                        log("DRAG->TAP dropped: held ${ms}ms > ${config.tapMaxMs}ms without moving (not a tap)")
                     } else if (SystemClock.uptimeMillis() - guard.lastTapMs < 250) {
                         log("DRAG->TAP skipped: the system already sent a tap for this press")
                     } else {

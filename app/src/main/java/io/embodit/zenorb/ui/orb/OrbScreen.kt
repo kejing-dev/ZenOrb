@@ -21,6 +21,8 @@ import com.pico.spatial.ui.foundation.dsl.registerSystem
 import com.pico.spatial.ui.foundation.dsl.unregisterSystem
 import com.pico.spatial.ui.geometry.Offset3D
 import com.pico.spatial.ui.platform.containers.LocalSpatialNavigator
+import io.embodit.zenorb.domain.Sfx
+import io.embodit.zenorb.domain.TapRule
 import io.embodit.zenorb.platform.Graph
 import io.embodit.zenorb.platform.TAG
 import io.embodit.zenorb.ui.orb.input.BoardInputConfig
@@ -70,9 +72,10 @@ fun OrbScreen() {
         val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
             when (e) {
                 androidx.lifecycle.Lifecycle.Event.ON_STOP -> { Log.i(TAG, "LIFECYCLE background"); graph.onBackground() }
+                androidx.lifecycle.Lifecycle.Event.ON_START -> graph.onForeground()
                 androidx.lifecycle.Lifecycle.Event.ON_RESUME -> {
                     Log.i(TAG, "LIFECYCLE resume panel=${graph.window.panelState}")
-                    // the launcher icon tapped again brings the volume forward; a closed panel comes back beside it (T10)
+                    // (the platform gives no callback when the launcher icon is tapped again; the recall stone is the way back, T10)
                     if (graph.window.panelState == "ON_DESTROY") graph.window.open("resume")
                 }
                 androidx.lifecycle.Lifecycle.Event.ON_DESTROY -> graph.window.onVolumeLifecycle("ON_DESTROY")
@@ -101,7 +104,7 @@ fun OrbScreen() {
     SpatialView(
         modifier = Modifier
             .fillMaxSize()
-            .boardInput(remember { TargetResolver.byName(Names::target) }, listener, BoardInputConfig(dragStartM = 0.010f, logTag = TAG)),
+            .boardInput(remember { TargetResolver.byName(Names::target) }, listener, BoardInputConfig(dragStartM = TapRule.DRAG_M, tapMaxMs = TapRule.TAP_MS, logTag = TAG)),
         initial = { content, _ ->
             listener.content = content
             content.addEntity(scene.root)
@@ -140,9 +143,20 @@ internal class OrbListener(private val graph: Graph, private val scene: OrbScene
 
     override fun onTap(target: String?, source: InputSource, position: Offset3D?) {
         BoardInputLog.write(TAG, "INPUT tap src=${source.label} target=$target")
-        if (target == Names.ORB) graph.flow.orbTap()
+        when (target) {
+            Names.ORB -> graph.flow.orbTap()
+            Names.RECALL -> recall("stone")
+        }
     }
 
+    /** The recall stone 「⋯」 (design v5 T10): reopen the control window beside the orb (or put it back there). */
+    fun recall(why: String) {
+        scene.pressStone()
+        graph.sounds.play(Sfx.TICK)
+        graph.window.recall(why)
+    }
+
+    // gate:allow shared-drag 用户 11-12 定留 Shared Space，点球开始/暂停为主路径
     override fun onDragStart(target: String, source: InputSource): Boolean {
         if (target != Names.ORB) return false
         dragging = graph.flow.dragBegin()
@@ -158,7 +172,7 @@ internal class OrbListener(private val graph: Graph, private val scene: OrbScene
 
     override fun onDragCancel() { if (dragging) graph.flow.dragEnd(); dragging = false }
 
-    override fun onHover(target: String?, source: InputSource) {}
+    override fun onHover(target: String?, source: InputSource) { scene.stoneHovered = target == Names.RECALL }
 
     /** Debug: a drag through the same flow calls ([dys] = cumulative vertical travel in content metres, one per frame). */
     fun inject(dys: List<Float>, release: Boolean = true) {

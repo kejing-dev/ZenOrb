@@ -3,7 +3,7 @@ loopback from the emulator. Uses the app's default gains (volume 「中」 = 0.7
 
   ~/.factory-venv/bin/python tools/loudness.py OUT_DIR VERSION
 
-loudness-<v>.wav   the event sounds of a round back to back (inhale bell, exhale bell, tick, round-done bell, focus-end
+loudness-<v>.wav   the event sounds of a round back to back (inhale bell, exhale bell, matched bell, round-done bell, focus-end
                    bell), silences trimmed: what ui_gates measures (voiced RMS: 20 ms windows above peak -30 dB)
 burst-<v>.wav      the tick 5 times 80 ms apart with the one-instance rule (D51: a new one stops the previous)
 """
@@ -14,7 +14,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SND = os.path.join(ROOT, "app", "src", "main", "assets", "sounds")
 SR = 44100
 VOL = 0.75
-LEVEL = {"inhale": 1.0, "exhale": 1.0, "tick": 1.0, "done": 1.0, "focus_end": 1.0}
+LEVEL = {"inhale": 0.5, "exhale": 0.5, "tick": 0.32, "done": 0.5, "focus_end": 0.56}   # = SoundPlayer.LEVEL (v0.1.1: -6 dB)
 
 
 def load(n):
@@ -58,7 +58,7 @@ def main():
     seq = np.concatenate(parts)
     save(os.path.join(out, f"loudness-{ver}.wav"), seq)
     r, p = voiced(seq)
-    t = load("tick") * VOL
+    t = load("tick") * VOL * LEVEL["tick"]
     burst = np.zeros(int(0.08 * SR) * 4 + len(t))
     for i in range(5):
         a = int(0.08 * SR) * i

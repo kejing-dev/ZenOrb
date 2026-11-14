@@ -16,7 +16,7 @@ import io.embodit.zenorb.ui.theme.ZenTheme
 
 /**
  * Two surfaces in Shared Space (design windowModel volume_plus_control_window): the orb volume (default container,
- * 0.32 x 0.30 x 0.26 m from the manifest) and the control window (Planar 420 x 424 dp) to its right. Every open uses
+ * 0.32 x 0.30 x 0.26 m from the manifest) and the control window (Planar 420 x 488 dp) to its right. Every open uses
  * Placement.right(volume) (D44: Shared Space never promises "in front of you").
  */
 fun mainApp(scope: SpatialAppScope) =
@@ -27,11 +27,11 @@ fun mainApp(scope: SpatialAppScope) =
         WindowContainer(
             Containers.CONTROL,
             form = Form.Planar,
-            defaultSize = WindowContainerSize(width = 420.dp, height = 424.dp),
+            defaultSize = WindowContainerSize(width = 420.dp, height = 488.dp),
             placement = { containers.firstOrNull { it.id == Containers.VOLUME }?.let { Placement.right(it) } ?: Placement.none() },
         ) {
             ZenTheme {
-                Box(Modifier.windowConstraints(minWidth = 420.dp, minHeight = 424.dp, maxWidth = 640.dp, maxHeight = 424.dp)) { ControlWindow() }
+                Box(Modifier.windowConstraints(minWidth = 420.dp, minHeight = 488.dp, maxWidth = 640.dp, maxHeight = 488.dp)) { ControlWindow() }
             }
         }
     }

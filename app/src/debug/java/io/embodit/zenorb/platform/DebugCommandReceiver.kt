@@ -42,7 +42,7 @@ class DebugCommandReceiver : BroadcastReceiver() {
         Log.i(TAG, "DEBUG $cmd $arg")
         when (cmd) {
             // states through the real calls
-            "tap" -> f.orbTap()
+            "tap" -> Active.listener?.onTap(io.embodit.zenorb.ui.orb.Names.ORB, io.embodit.zenorb.ui.orb.input.InputSource.UNKNOWN, null) ?: f.orbTap()
             "start" -> f.startBreath(PatternId.parse(arg))
             "pause" -> f.pause()
             "resume" -> f.resume()
@@ -56,7 +56,10 @@ class DebugCommandReceiver : BroadcastReceiver() {
             "focusfast" -> f.focusFast = arg != "off"
             "pattern" -> PatternId.parse(arg)?.let { p -> g.settings.update { it.copy(lastPattern = p) } }
             "style" -> g.settings.update { it.copy(style = Style.valueOf(arg.uppercase())) }
-            "handsfree" -> g.settings.update { it.copy(handsFree = arg != "off") }
+            "ambient" -> g.settings.update { it.copy(ambient = arg != "off") }
+            // the recall stone through the listener (same path as a tap / hover on it)
+            "tapstone" -> Active.listener?.onTap(io.embodit.zenorb.ui.orb.Names.RECALL, io.embodit.zenorb.ui.orb.input.InputSource.UNKNOWN, null)
+            "hoverstone" -> Active.listener?.onHover(if (arg == "off") null else io.embodit.zenorb.ui.orb.Names.RECALL, io.embodit.zenorb.ui.orb.input.InputSource.UNKNOWN)
             "lang" -> g.settings.update { it.copy(language = when (arg) { "zh" -> Language.ZH; "en" -> Language.EN; else -> Language.SYSTEM }) }
             "sound" -> g.settings.update { it.copy(muted = arg == "off") }
             "volume" -> g.settings.update { it.copy(volume = arg.toInt().coerceIn(0, 2)) }
@@ -89,7 +92,7 @@ class DebugCommandReceiver : BroadcastReceiver() {
             "fresh" -> { g.store.clear(); g.settings.update { it.copy(welcomed = false) }; f.clearHistory(); f.debugWelcome() }
             "s00hold" -> context.getSharedPreferences("debug", Context.MODE_PRIVATE).edit().putBoolean("s00hold", arg == "on").apply()
             "state", "dump" -> Log.i(TAG, "DUMP breath=${f.breath} focus=${f.focusSt} pattern=${f.pattern} t=${"%.2f".format(f.t)} f=${"%.3f".format(f.f)} held=${f.held} " +
-                "results=${f.judge.results} band=${f.judge.inBand} corr=${f.judge.correction} page=${Ui.page} confirm=${Ui.confirm} panel=${g.window.panelState} " +
+                "lead=${f.lead} scoreFrom=${f.scoreFrom} glow=${"%.2f".format(f.motion.glow)} results=${f.judge.results} band=${f.judge.inBand} corr=${f.judge.correction} page=${Ui.page} confirm=${Ui.confirm} panel=${g.window.panelState} " +
                 "volume=${g.window.volumeState} fps=${SceneHolder.scene?.fps} scale=${Active.listener?.scale} settings=${g.settings.value} today=${f.todayStats()}")
             else -> Log.w(TAG, "DEBUG unknown $cmd")
         }

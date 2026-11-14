@@ -9,25 +9,42 @@ object Geo {
     const val ORB_R = 0.050f
     const val REST_Y = 0.070f
     const val LIFT = 0.140f
-    const val HIT_R = 0.060f
+    /** Orb collider (design hitTargets >= 0.055; 0.055 keeps the recall stone gap >= 0.3 x its 0.077 box). */
+    const val HIT_R = 0.055f
     const val RING_GAP = 0.012f
     const val TAG_GAP = 0.016f
-    const val TAG_W = 0.080f
-    const val TAG_H = 0.026f
-    const val CAP_W = 0.170f
-    const val CAP_H = 0.026f
-    const val CAP_Y = 0.013f
+    /** v0.1.1: 3D words 0.022 m (Latin capitals ~0.0157 m = 0.51 deg at the system's 1.75 m, build.md D13 >= 0.5 deg). */
+    const val TEXT_H = 0.022f
+    const val TAG_W = 0.088f
+    const val TAG_H = 0.032f
+    const val CAP_W = 0.260f
+    const val CAP_H = 0.032f
+    const val CAP_Y = 0.016f
     const val CAP_Z = 0.104f
     const val CAP_TILT_DEG = 20f
-    /** Text height (design: 0.018 m) inside the quads above. */
-    const val TEXT_H = 0.018f
     /** Volume box (design containment check): x +-0.16, y 0..0.30, z +-0.13. */
     const val BOX_X = 0.16f
     const val BOX_Y = 0.30f
     const val BOX_Z = 0.13f
     const val SHADOW_R = 0.085f
+    /**
+     * Recall stone (design v5 spatialLayout.recallStone, left front of the cradle). The volume's uniform resize cannot be
+     * limited to >= 1.0 from the manifest (N11), so the collider is the fallback 0.077 cube (2.0 deg at 0.8x, 1.75 m).
+     */
+    const val STONE_X = -0.118f
+    const val STONE_Z = 0.055f
+    const val STONE_W = 0.040f
+    const val STONE_H = 0.022f
+    const val STONE_D = 0.036f
+    const val STONE_HIT = 0.077f
+    const val HOVER_X = -0.103f
+    const val HOVER_Y = 0.095f
+    const val HOVER_W = 0.110f
+    const val HOVER_H = 0.032f
+    /** The orb breathes with itself (user 2026-11-13, B31): about +8 % at full inhale. */
+    const val BREATH_SWELL = 0.08f
 
-    fun scale(f: Float) = 1f + 0.2f * f
+    fun scale(f: Float) = 1f + BREATH_SWELL * f
     fun radius(f: Float) = ORB_R * scale(f)
     fun orbY(f: Float) = REST_Y + LIFT * f
     fun ringR(fStar: Float) = radius(fStar) + RING_GAP
@@ -166,6 +183,48 @@ class SyncJudge {
         }
     }
 
-    fun matched(skipFirst: Boolean = true): Int = results.withIndex().count { (i, m) -> m && !(skipFirst && i == 0) }
-    fun scored(skipFirst: Boolean = true): Int = (results.size - if (skipFirst && results.isNotEmpty()) 1 else 0).coerceAtLeast(0)
+    /** Matched breaths among the scored ones: breath index >= [from] (design v5: only the breaths you led count). */
+    fun matched(from: Int): Int = if (from < 0) 0 else results.withIndex().count { (i, m) -> m && i >= from }
+    fun scored(from: Int): Int = if (from < 0) 0 else results.indices.count { it >= from }
+}
+
+/**
+ * Tap vs drag on the orb (design mainInteraction.modes.tapVsDrag): a tap = press to release <= 0.5 s and the hand moved
+ * <= 1 cm; a drag = more than 1 cm while held (once over, never a tap); held still longer than 0.5 s = nothing.
+ */
+object TapRule {
+    const val TAP_MS = 500L
+    const val DRAG_M = 0.010f
+    enum class Kind { TAP, DRAG, NOTHING }
+    fun classify(heldMs: Long, maxTravelM: Float): Kind = when {
+        maxTravelM > DRAG_M -> Kind.DRAG
+        heldMs <= TAP_MS -> Kind.TAP
+        else -> Kind.NOTHING
+    }
+}
+
+/**
+ * How the orb itself breathes (user 2026-11-13: 「怎么只有那个环在上下动」; B31 补 / D51): it rises and falls with the
+ * rhythm, swells about 8 % and brightens on the in-breath, shrinks and dims on the out-breath, and rests with a still,
+ * faint glow in the holds. Everything is eased per dt (no jumps): [lift] approaches its target with a 0.18 s time
+ * constant, [glow] with 0.30 s. glow 0 = the resting orb, 1 = full in-breath.
+ */
+class OrbMotion {
+    var lift = 0f; private set
+    var glow = 0f; private set
+
+    fun step(dt: Float, liftTarget: Float, glowTarget: Float, liftTau: Float = 0.18f) {
+        lift = ease(lift, liftTarget, dt, liftTau)
+        glow = ease(glow, glowTarget, dt, 0.30f)
+    }
+
+    fun snap(liftNow: Float) { lift = liftNow }
+
+    companion object {
+        fun ease(cur: Float, target: Float, dt: Float, tau: Float): Float = cur + (target - cur) * (1f - kotlin.math.exp(-dt / tau))
+        /** Base colour factor: 0.80 at rest / out-breath end, 1.0 at full in-breath. */
+        fun brightness(glow: Float): Float = 0.80f + 0.20f * glow.coerceIn(0f, 1f)
+        /** Extra warm emission (fraction of the style's warm colour): a faint still glow even at rest during a round. */
+        fun emission(glow: Float, inRound: Boolean): Float = if (!inRound) 0f else 0.035f + 0.075f * glow.coerceIn(0f, 1f)
+    }
 }

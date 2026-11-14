@@ -23,6 +23,8 @@ class LayoutTest {
         Style.MOSS to Box(-0.078f, 0f, -0.078f, 0.078f, 0.0247f, 0.078f),
     )
     private val MOSS_DISP = 0.0025f
+    private val h = Geo.STONE_HIT / 2
+    private val stoneHit = Box(Geo.STONE_X - h, 0f, Geo.STONE_Z - h, Geo.STONE_X + h, Geo.STONE_HIT, Geo.STONE_Z + h)
 
     private fun boxes(style: Style, f: Float, fStar: Float): Map<String, Box> {
         val r = Geo.radius(f) + if (style == Style.MOSS) MOSS_DISP * Geo.scale(f) else 0f
@@ -41,6 +43,9 @@ class LayoutTest {
             "tag" to Box(tx, y - Geo.TAG_H / 2, -0.001f, tx + Geo.TAG_W, y + Geo.TAG_H / 2, 0.001f),
             "caption" to Box(-Geo.CAP_W / 2, Geo.CAP_Y - dy, Geo.CAP_Z - dz, Geo.CAP_W / 2, Geo.CAP_Y + dy, Geo.CAP_Z + dz),
             "arc" to Box(-arc, style.rimY - 0.0018f, -arc, arc, style.rimY + 0.0018f, arc),
+            "stone" to Box(Geo.STONE_X - Geo.STONE_W / 2 * 1.1f, 0f, Geo.STONE_Z - Geo.STONE_D / 2 * 1.1f, Geo.STONE_X + Geo.STONE_W / 2 * 1.1f, Geo.STONE_H * 1.05f, Geo.STONE_Z + Geo.STONE_D / 2 * 1.1f),
+            "stoneHit" to stoneHit,
+            "hover" to Box(Geo.HOVER_X - Geo.HOVER_W / 2, Geo.HOVER_Y - Geo.HOVER_H / 2, Geo.STONE_Z - 0.001f, Geo.HOVER_X + Geo.HOVER_W / 2, Geo.HOVER_Y + Geo.HOVER_H / 2, Geo.STONE_Z + 0.001f),
         )
     }
 
@@ -104,14 +109,36 @@ class LayoutTest {
         assertTrue(deg >= 2f)
     }
 
+    @Test fun theRecallStoneIsABigEnoughSeparateTarget() {
+        // design hitTargets / N11: >= 2 deg at 1.75 m even at the smallest system scale (0.8x: no manifest minimum)
+        for (k in listOf(0.8f, 1f)) {
+            val deg = Math.toDegrees(2 * atan(Geo.STONE_HIT * k / 2 / 1.75)).toFloat()
+            println("HIT recall stone %.2f deg at 1.75 m, scale %.1f".format(deg, k))
+            assertTrue(deg >= 2f)
+        }
+        // D17: gap to the orb collider >= 1.5 cm and >= 0.3 x the target size
+        val gap = -Geo.HIT_R - stoneHit.x1
+        println("HIT recall stone gap to the orb %.4f m".format(gap))
+        assertTrue(gap >= 0.015f && gap >= 0.3f * Geo.STONE_HIT)
+        // the hover word does not sit on the resting orb seen from the front
+        assertTrue(Geo.HOVER_X + Geo.HOVER_W / 2 * 0.95f <= -Geo.radius(0f))
+    }
+
+    @Test fun threeDWordsAreAtLeastHalfADegree() {
+        // build.md D13: Latin capitals >= 0.5 deg at the design eye (system default 1.75 m); Roboto Bold cap height 0.711 em
+        val cap = 0.711f * Geo.TEXT_H
+        val deg = Math.toDegrees(2 * atan(cap / 2 / 1.75)).toFloat()
+        println("TEXT capitals %.4f m = %.2f deg at 1.75 m (CJK full glyph %.2f deg)".format(cap, deg, Math.toDegrees(2 * atan(Geo.TEXT_H / 2 / 1.75))))
+        assertTrue(deg >= 0.5f)
+    }
+
     /** Design hintStrings._widths: Chinese glyph = text height, Latin / digits 0.6 x text height. */
     private fun estimate(s: String): Float = s.sumOf { c -> (if (c.code > 0x2E80) Geo.TEXT_H else 0.6f * Geo.TEXT_H).toDouble() }.toFloat()
 
     @Test fun hintWordsFitWithoutShrinking() {
-        for (h in Hint.all()) for (zh in listOf(true, false)) {
+        for (h in Hint.all() + Hint.HoverRecall) for (zh in listOf(true, false)) {
             val s = h.text(zh)
-            val isTag = h is Hint.Tag || h == Hint.TagPaused
-            val max = if (isTag) 0.070f else 0.160f
+            val max = when (h) { is Hint.Tag, Hint.TagPaused -> Geo.TAG_W - 0.005f; Hint.HoverRecall -> Geo.HOVER_W - 0.004f; else -> Geo.CAP_W - 0.01f }
             assertTrue("\"$s\" ${estimate(s)} > $max", estimate(s) <= max)
         }
     }

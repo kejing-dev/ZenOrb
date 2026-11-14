@@ -1,7 +1,7 @@
 # 呼吸禅境 ZenOrb: project guidance
 
-A breathing orb on the desk for PICO OS 6 Shared Space (Spatial SDK BOM 6.1.9), package `io.embodit.zenorb`, v0.1.0.
-Design contract: spatial-app-factory `apps/zen-orb/design-package.json` v4 (gate B round 2, 2026-11-12: default style
+A breathing orb on the desk for PICO OS 6 Shared Space (Spatial SDK BOM 6.1.9), package `io.embodit.zenorb`, v0.1.1.
+Design contract: spatial-app-factory `apps/zen-orb/design-package.json` v5 (gate B round 3, 2026-11-13: tap = follow, drag = lead, recall stone 「⋯」; user on v0.1.0: the orb itself breathes, quieter singing-bowl sounds). Earlier: v4 (gate B round 2, 2026-11-12: default style
 oat glaze & walnut, switchable brass & basalt / moss & slate; hints beside the orb + one control window; pinch, lift to
 breathe in, lower to breathe out; own 3D models; v1 = desk volume only; focus timer kept, no "today" page).
 Skeleton from aura-garden (same archetype A: volume + Placement.right control window, theme, SoundPool, board-input).
@@ -14,7 +14,8 @@ GitHub: `kejing-dev/ZenOrb` (private).
   torus, scaled to r(f*) + 0.012), focus arc (36 x 10 deg segments on the cradle rim), the tag right of the orb and the
   caption in front of the cradle (text drawn into textures, light text + dark outline, no plate), opaque contact shadow,
   warm key light (1500 lux-scale).
-- **Control window** (`ZenOrbControl`, Planar 420 x 424 dp, `Placement.right(ZenOrbVolume)`), no TabBar: header
+- **Recall stone** `recall` left front of the cradle (pebble + 3 dots, 0.077 box collider, hover word 「控制窗 / Controls」): tap = reopen the control window beside the orb.
+- **Control window** (`ZenOrbControl`, Planar 420 x 488 dp, `Placement.right(ZenOrbVolume)`), no TabBar: header
   (title, [静音], [设置]); pages home S02 / welcome S01 / breath S03r S03 S05 / summary S04 / focus S06 S06p / focus done
   S07 / settings S09 (pushed) / confirm (quit S11, clear, give up) / S00 loading / S10 volume closed.
   Closing it with the system x is fine: pinching the orb starts the last rhythm (T14); it comes back at focus end and
@@ -32,7 +33,10 @@ GitHub: `kejing-dev/ZenOrb` (private).
 | `ui/control/*` | the window pages; every Text logs `OVERFLOW <tag>` when cut |
 | `tools/` | `build_models.py` (3 styles -> GLB, port of design `zen-orb_3d.js`), `make_sounds.py` (CC0 recordings), `build_icon.py`, `loudness.py`, `zo.sh` |
 
-Input (container-agnostic, D53): the board-input template resolves hits to `orb`; a tap = start (T4), a drag = take the
+Modes (design v5): a tap (<= 0.5 s, <= 1 cm, `TapRule`) on the orb = 3 · 2 · 1 then FOLLOW: the orb breathes by itself
+(`OrbMotion`: height, ~8 % swell, brightness / faint emission, eased per dt), nothing scored, phase bells. A drag = LEAD:
+guide ring, scored from the next breath. A tap pauses / resumes.
+Input (container-agnostic, D53): the board-input template resolves hits to `orb` / `recall`; a drag = take the
 orb: `Flow.dragBegin()` / `dragMove(dyContentMetres)` / `dragEnd()`. Only the vertical travel counts; it is divided by
 the volume's world scale (view px -> content metres at the press). A Full Space hand input would call the same three.
 
@@ -55,9 +59,9 @@ Emulators are shared: borrow with `python3 -I bin/emu_borrow.py borrow zen-orb` 
 | S01 第一次 | `fresh` (or `pm clear`) + relaunch; demo loops while the welcome is up |
 | S02 空闲 | `tap`, `tap`, `end`, `done` (gets past the welcome) |
 | S03r 准备 | `start CALM` (or `tap` on idle) |
-| S03 跟着 | `tap` (or `grab 0`) then `follow "lag=0.4 amp=0.9"` (drives the drag path every 33 ms); `hold "phase=in f=0.55 inband=true"` / `inband=false` for stills; `unhold` |
+| S03f 跟随 | `tap` (wait 3 s); `hold "phase=in"` for a still |
+| S03 跟拖 | `grab 0` then `follow "lag=0.4 amp=0.9"` (drives the drag path every 33 ms); `hold "phase=in f=0.55 inband=true"` / `inband=false` for stills; `unhold` |
 | S03p 出带 | `stopfollow`, `grab 0`, wait 2.5 s -> 「再提一点」; `release`, wait 2 s -> 「捏住接着来」 (then `hold "f=0.05"`) |
-| S03h 闭眼跟 | `handsfree on`, `start CALM`, wait 4 s |
 | S04 小结 | `end` during S03 (or let the round finish) |
 | S05 暂停 | `pause` |
 | S06 / S06p | `focus 25` / `focuspause`; `focusfast on` before `focus` = 1 min per second |
@@ -65,7 +69,7 @@ Emulators are shared: borrow with `python3 -I bin/emu_borrow.py borrow zen-orb` 
 | S09 设置 | `page settings` |
 | S11 / 清空 / 放弃 | `confirm quit` / `confirm clear` / `giveup` (`giveupok` = its [确定]) |
 | S10 光球收起 | `closevolume`; `bring` |
-Other: `style glaze|brass|moss`, `pattern calm|box|sleep`, `lang zh|en|system`, `sound on|off`, `volume 0..2`,
+Recall stone: `closepanel` (caption 「点 ⋯ 叫回控制窗」 4 s), `hoverstone on|off`, `tapstone`. Other: `ambient on|off`, `style glaze|brass|moss`, `pattern calm|box|sleep`, `lang zh|en|system`, `sound on|off`, `volume 0..2`,
 `closepanel`, `openpanel`, `testf on|off` (F-up test on the words), `seek <s>`, `dump`.
 Screenshot list: `apps/zen-orb/build/shots/<state>-<zh|en>.png` (script in the build station's scratchpad, steps above).
 

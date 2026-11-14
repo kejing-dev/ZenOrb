@@ -88,7 +88,7 @@ class SettingsStore(context: Context) {
             .putInt("volume", s.volume)
             .putBoolean("muted", s.muted)
             .putString("style", s.style.name)
-            .putBoolean("handsFree", s.handsFree)
+            .putBoolean("ambient", s.ambient)
             .putString("lastPattern", s.lastPattern.name)
             .putInt("focusMin", s.focusMin)
             .putBoolean("welcomed", s.welcomed)
@@ -101,7 +101,7 @@ class SettingsStore(context: Context) {
             volume = prefs.getInt("volume", 1).coerceIn(0, 2),
             muted = prefs.getBoolean("muted", false),
             style = Style.valueOf(prefs.getString("style", Style.GLAZE.name)!!),
-            handsFree = prefs.getBoolean("handsFree", false),
+            ambient = prefs.getBoolean("ambient", false),
             lastPattern = PatternId.parse(prefs.getString("lastPattern", null))?.takeIf { it in PatternId.SELECTABLE } ?: PatternId.CALM,
             focusMin = prefs.getInt("focusMin", 25).takeIf { it in Settings.FOCUS_LENGTHS } ?: 25,
             welcomed = prefs.getBoolean("welcomed", false),

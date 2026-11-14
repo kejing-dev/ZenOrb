@@ -18,13 +18,12 @@
     <string name="btn_start_breath">开始呼吸</string>
     <string name="focus_min">%d 分</string>
     <string name="btn_start_focus">开始专注</string>
-    <string name="welcome">捏住光球，提起来吸气，放下去呼气。</string>
+    <string name="welcome">点一下光球，跟着它呼吸。</string>
     <string name="btn_start">开始</string>
     <string name="ready_state">%s · 准备</string>
     <string name="ready_sub">手放低、手肘靠着就行，幅度小也算。</string>
     <string name="session_state">%1$s · %2$s</string>
     <string name="session_sub">看球就行，这里不用盯</string>
-    <string name="handsfree_sub">闭眼跟中，拖一下球就换你来</string>
     <string name="paused_state">停一下</string>
     <string name="paused_sub">停一下，随时接着来。</string>
     <string name="btn_pause">暂停</string>
@@ -35,9 +34,8 @@
     <string name="focus_paused_state">专注 · 停着</string>
     <string name="focus_paused_sub">先停着，回来接上。</string>
     <string name="btn_drop">放弃</string>
-    <string name="summary_big">%2$d 口里合上 %1$d 口</string>
-    <string name="summary_low">跟了 %d 口，下次手放慢一点试试。</string>
-    <string name="summary_handsfree">跟了 %1$d 分钟，%2$d 口。</string>
+    <string name="summary_big">跟了 %d 口</string>
+    <string name="summary_low">你拖的 %2$d 口里合上 %1$d 口，下次慢一点</string>
     <string name="source_calm">一分钟六口左右的慢呼吸，常用来放松。</string>
     <string name="source_box">方形呼吸：四拍吸、停、呼、停。</string>
     <string name="source_sleep">4-7-8 呼吸，睡前做四口就够，头晕就停。</string>
@@ -58,7 +56,6 @@
     <string name="style_glaze">燕麦釉</string>
     <string name="style_brass">黄铜黑石</string>
     <string name="style_moss">苔石</string>
-    <string name="settings_handsfree">闭眼跟</string>
     <string name="today_line">今天 呼吸 %1$d 分钟 · 合拍 %2$d%% · 专注 %3$d 个</string>
     <string name="btn_clear">清空记录</string>
     <string name="btn_quit">退出应用</string>
@@ -73,4 +70,9 @@
     <string name="s10">光球收起来了。</string>
     <string name="btn_bring">把光球放回来</string>
     <string name="focus_today">今天第 %d 个专注。</string>
+    <string name="welcome_sub">想自己来：捏住提起来吸，放下去呼。</string>
+    <string name="follow_sub">跟着球呼吸就行，捏住它就换你来</string>
+    <string name="summary_led">你拖的 %2$d 口里合上 %1$d 口</string>
+    <string name="settings_ambient">环境声（溪水，很轻）</string>
+    <string name="btn_reopen">重开控制窗</string>
 </resources>

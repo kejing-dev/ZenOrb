@@ -60,10 +60,12 @@ class Graph(context: Context) {
     private val main = Handler(Looper.getMainLooper())
 
     init {
+        window.onClosedByUser = { flow.panelClosed() }
         scope.launch {
             settings.settings.collect { s ->
                 sounds.muted = s.muted
                 sounds.volumeLevel = s.volume
+                sounds.ambientOn = s.ambient
                 flow.republish()
             }
         }
@@ -103,7 +105,10 @@ class Graph(context: Context) {
         scope.launch(Dispatchers.IO) { store.save(snap); Log.i(TAG, "SAVE $why days=${snap.days.size} focus=${snap.focus != null}") }
     }
 
+    fun onForeground() { sounds.foreground = true }
+
     fun onBackground() {
+        sounds.foreground = false
         flow.onBackground()
         saveNow("background")
     }
@@ -114,12 +119,20 @@ class Graph(context: Context) {
 }
 
 /**
- * Event sounds (design sound.list): CC0 singing-bowl and wood-block recordings through a SoundPool, variant rotation and
- * +-3..4 % pitch (D51); one instance per event (a new one stops the previous); no ambient loop (B24).
+ * Event sounds (design sound.list, user 2026-11-13 「声音要再 peace 宁静一点，有点禅意一点」): CC0 singing-bowl
+ * recordings only, slow attack (>= 250 ms), long natural tail, nothing above 4 kHz, in / out a major third apart, 6 dB
+ * under v0.1.0; no wood tick. Variant rotation and +-3 % pitch (D51); one instance per event (a new one stops the
+ * previous). Optional, off by default: a very quiet creek bed (settings 「环境声」, B24 exception the user asked for).
  */
 class SoundPlayer(private val context: Context) {
     @Volatile var muted = false
+        set(v) { field = v; updateAmbient() }
     @Volatile var volumeLevel = 1
+        set(v) { field = v; updateAmbient() }
+    @Volatile var ambientOn = false
+        set(v) { field = v; updateAmbient() }
+    @Volatile var foreground = true
+        set(v) { field = v; updateAmbient() }
 
     private val pool = SoundPool.Builder().setMaxStreams(4)
         .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_GAME).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
@@ -129,6 +142,8 @@ class SoundPlayer(private val context: Context) {
     private val random = Random(7)
     private val playing = HashMap<Sfx, Int>()
     private val lastVariant = HashMap<Sfx, Int>()
+    private var bed: android.media.MediaPlayer? = null
+    private val main = Handler(Looper.getMainLooper())
 
     init {
         pool.setOnLoadCompleteListener { _, id, status -> if (status == 0) synchronized(loaded) { loaded += id } }
@@ -166,10 +181,36 @@ class SoundPlayer(private val context: Context) {
         Log.i(TAG, "SFX $s v=$v rate=${"%.3f".format(rate)}")
     }
 
-    fun release() = runCatching { pool.release() }
+    /** The creek bed: plays while enabled, not muted and the app is in front; released when off (open -> close pairs, D41). */
+    private fun updateAmbient() {
+        main.post {
+            val want = ambientOn && !muted && foreground
+            val g = gain() * AMBIENT_LEVEL
+            if (want && bed == null) {
+                bed = runCatching {
+                    android.media.MediaPlayer().apply {
+                        context.assets.openFd("sounds/ambient_creek.ogg").use { fd -> setDataSource(fd.fileDescriptor, fd.startOffset, fd.length) }
+                        setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_GAME).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
+                        isLooping = true
+                        setVolume(g, g)
+                        prepare(); start()
+                    }
+                }.onFailure { Log.w(TAG, "AMBIENT failed: $it") }.getOrNull()
+                Log.i(TAG, "AMBIENT on gain=${"%.3f".format(g)} ok=${bed != null}")
+            } else if (!want && bed != null) {
+                runCatching { bed?.stop(); bed?.release() }; bed = null
+                Log.i(TAG, "AMBIENT off")
+            } else bed?.setVolume(g, g)
+        }
+    }
+
+    fun release() = runCatching { ambientOn = false; main.post { runCatching { bed?.release() }; bed = null }; pool.release() }
 
     companion object {
-        val LEVEL = mapOf(Sfx.INHALE to 1.0f, Sfx.EXHALE to 1.0f, Sfx.TICK to 1.0f, Sfx.DONE to 1.0f, Sfx.FOCUS_END to 1.0f)
-        val JITTER = mapOf(Sfx.INHALE to 0.03f, Sfx.EXHALE to 0.03f, Sfx.TICK to 0.04f, Sfx.DONE to 0f, Sfx.FOCUS_END to 0f)
+        /** Playback level per event on top of the file (files peak -1 dBFS): -6 dB under v0.1.0 for the bells (user 2026-11-13). */
+        val LEVEL = mapOf(Sfx.INHALE to 0.5f, Sfx.EXHALE to 0.5f, Sfx.TICK to 0.32f, Sfx.DONE to 0.5f, Sfx.FOCUS_END to 0.56f)
+        val JITTER = mapOf(Sfx.INHALE to 0.03f, Sfx.EXHALE to 0.03f, Sfx.TICK to 0.03f, Sfx.DONE to 0f, Sfx.FOCUS_END to 0f)
+        /** The creek is a bed, not a sound: about 26 dB under the bells' peak. */
+        const val AMBIENT_LEVEL = 0.06f
     }
 }
